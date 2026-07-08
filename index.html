@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <title>MultiStream Theater Ultimate</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0e0e10; color: #efeff1; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        .main-layout { display: flex; width: 100vw; height: 100vh; position: relative; }
+        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; display: flex; flex-direction: column; padding: 15px; gap: 10px; z-index: 10; transition: margin-left 0.3s; position: relative; }
+        .sidebar.collapsed { margin-left: -320px; }
+        .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
+        
+        .list-header { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; cursor: pointer; }
+        #activeContent { display: block; }
+        
+        .btn-group { display: flex; gap: 5px; }
+        .btn-sm { flex: 1; padding: 8px; background: #26262b; color: white; border: 1px solid #3a3a3d; cursor: pointer; border-radius: 4px; }
+        .btn-sm.active { background: #53fc18; color: #000; font-weight: bold; }
+        .btn-danger { background: #eb0400; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+        .btn-mute { background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+        .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; }
+        input, select, button { background: #1f1f23; color: #fff; border: 1px solid #3a3a3d; padding: 8px; border-radius: 4px; }
+        .btn-add { background: #53fc18; color: #000; font-weight: bold; cursor: pointer; }
+        
+        #activeList, #channelList { flex: 1; overflow-y: auto; margin-top: 5px; }
+        .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
+        .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
+        .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .stream-slot.active { border: 2px solid #26262b; }
+        .slot-controls { position: absolute; top: 5px; left: 5px; z-index: 20; display: none; gap: 5px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; }
+        .stream-slot:hover .slot-controls { display: flex; }
+        .drag-handle { background: #333; padding: 2px 8px; cursor: grab; color: white; border-radius: 4px; user-select: none; }
+        .close-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+        
+        .stream-wrapper { width: 100%; height: 100%; display: flex; position: relative; }
+        .stream-label { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.8); padding: 4px 8px; color: #53fc18; font-weight: bold; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.2s; }
+        .stream-slot:hover .stream-label { opacity: 1; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+    <div class="main-layout">
+        <div class="sidebar" id="sidebar">
+            <button class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()">◀</button>
+            <div class="btn-group">
+                <button id="btn-1" class="btn-sm" onclick="changeGridMode(1)">1x1</button>
+                <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
+                <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
+            </div>
+            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
+                <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
+            </div>
+            <div class="manual-add-box">
+                <select id="platform"><option value="kick">Kick</option><option value="twitch">Twitch</option><option value="fansly">Fansly</option></select>
+                <input type="text" id="channelInput" placeholder="Nimi...">
+                <button class="btn-add" onclick="processNewChannel()">Lisää</button>
+            </div>
+            <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
+            <div id="activeContent"><div id="activeList"></div></div>
+            <div class="list-header" style="cursor: default;">Tallennetut kanavat</div>
+            <div id="channelList"></div>
+        </div>
+        <div class="grid-container" id="streamGrid"></div>
+    </div>
+
+    <script>
+        let gridMode = parseInt(localStorage.getItem('gridMode')) || 3;
+        let savedChannels = JSON.parse(localStorage.getItem('myChannels')) || [];
+        let slots = [];
+
+        function initSlots() {
+            const container = document.getElementById('streamGrid');
+            container.innerHTML = "";
+            slots = [];
+            for (let i = 0; i < 9; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'stream-slot';
+                slot.id = 'slot-' + i;
+                slot.ondragover = e => e.preventDefault();
+                slot.ondrop = drop;
+                slot.innerHTML = `<div class="slot-controls"><div class="drag-handle" draggable="true" ondragstart="drag(event, ${i})">☰</div></div><button>Vapaa</button>`;
+                container.appendChild(slot);
+                slots.push(slot);
+            }
+            updateGridDisplay();
+            renderLists();
+            restoreStreams();
+        }
+
+        function toggleActiveList() {
+            const content = document.getElementById('activeContent');
+            const icon = document.getElementById('toggleIcon');
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            icon.innerText = content.style.display === 'none' ? '▲' : '▼';
+        }
+
+        function updateLists() {
+            const activeList = document.getElementById('activeList');
+            activeList.innerHTML = "";
+            slots.forEach((s, i) => {
+                if(s.dataset.name) {
+                    activeList.innerHTML += `<div class="list-item">${i + 1}. ${s.dataset.name}</div>`;
+                }
+            });
+            renderSavedList();
+        }
+
+        function renderSavedList() {
+            const list = document.getElementById('channelList');
+            list.innerHTML = "";
+            const activeNames = slots.map(s => s.dataset.name);
+            savedChannels.forEach(c => {
+                if (!activeNames.includes(c.name)) {
+                    list.innerHTML += `<div class="saved-channel" onclick="processNewChannelManual('${c.name}', '${c.plat}')"><span>${c.name} (${c.plat})</span><button class="close-btn" onclick="deleteCh('${c.name}', event)">X</button></div>`;
+                }
+            });
+        }
+
+        function saveLayout() {
+            let layout = {};
+            slots.forEach((s, i) => {
+                if (s.dataset.name) layout[i] = { name: s.dataset.name, plat: s.dataset.plat };
+            });
+            localStorage.setItem('activeLayout', JSON.stringify(layout));
+            updateLists();
+        }
+
+        function restoreStreams() {
+            const layout = JSON.parse(localStorage.getItem('activeLayout'));
+            if (!layout) return;
+            for (let i in layout) loadStreamIntoSlot(i, layout[i].name, layout[i].plat);
+        }
+
+        function loadStreamIntoSlot(idx, name, plat) {
+            let url = plat === 'twitch' ? `https://player.twitch.tv/?channel=${name}&parent=${window.location.hostname}&muted=true` : (plat === 'fansly' ? `https://fansly.com/${name}` : `https://player.kick.com/${name}?muted=true`);
+            slots[idx].dataset.name = name;
+            slots[idx].dataset.plat = plat;
+            slots[idx].innerHTML = `<div class="slot-controls"><div class="drag-handle" draggable="true" ondragstart="drag(event, ${idx})">☰</div><button class="close-btn" onclick="clearSlot(${idx})">X</button></div><div class="stream-wrapper"><div class="stream-label">${parseInt(idx)+1}. ${name}</div><iframe src="${url}"></iframe></div>`;
+            slots[idx].classList.add('active');
+            updateLists();
+        }
+
+        function updateGridDisplay() {
+            const container = document.getElementById('streamGrid');
+            container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
+            container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
+            document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + gridMode).classList.add('active');
+            slots.forEach((s, i) => s.style.display = i < gridMode * gridMode ? 'flex' : 'none');
+        }
+
+        function changeGridMode(val) { gridMode = val; localStorage.setItem('gridMode', val); updateGridDisplay(); }
+        function muteAll() { slots.forEach(s => { const ifr = s.querySelector('iframe'); if (ifr && ifr.src.includes('kick')) ifr.src = ifr.src.split('?')[0] + "?muted=true"; }); }
+        function drag(e, i) { e.dataTransfer.setData("src", i); }
+
+        function drop(e) {
+            e.preventDefault();
+            const srcIdx = e.dataTransfer.getData("src");
+            const target = e.target.closest('.stream-slot');
+            const targetIdx = parseInt(target.id.split('-')[1]);
+            if (srcIdx == targetIdx) return;
+            const srcData = { name: slots[srcIdx].dataset.name, plat: slots[srcIdx].dataset.plat };
+            const targetData = { name: slots[targetIdx].dataset.name, plat: slots[targetIdx].dataset.plat };
+            srcData.name ? loadStreamIntoSlot(targetIdx, srcData.name, srcData.plat) : clearSlot(targetIdx);
+            targetData.name ? loadStreamIntoSlot(srcIdx, targetData.name, targetData.plat) : clearSlot(srcIdx);
+            saveLayout();
+        }
+
+        function processNewChannel() {
+            const input = document.getElementById('channelInput');
+            const name = input.value.trim().toLowerCase();
+            const plat = document.getElementById('platform').value;
+            if (!name) return;
+            if (!savedChannels.find(c => c.name === name)) {
+                savedChannels.push({ name, plat });
+                localStorage.setItem('myChannels', JSON.stringify(savedChannels));
+            }
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    break;
+                }
+            }
+            input.value = "";
+        }
+
+        function renderLists() { updateLists(); renderSavedList(); }
+        function processNewChannelManual(name, plat) { for (let i = 0; i < slots.length; i++) { if (!slots[i].classList.contains('active')) { loadStreamIntoSlot(i, name, plat); saveLayout(); return; } } }
+        
+        function deleteCh(name, e) { 
+            e.stopPropagation(); 
+            if(confirm("Oletko varma, että haluat poistaa kanavan " + name + " tallennetuista?")) {
+                savedChannels = savedChannels.filter(c => c.name !== name); 
+                localStorage.setItem('myChannels', JSON.stringify(savedChannels)); 
+                renderLists();
+            }
+        }
+        
+        function clearSlot(i) { slots[i].innerHTML = `<div class="slot-controls"><div class="drag-handle" draggable="true" ondragstart="drag(event, ${i})">☰</div></div><button>Vapaa</button>`; slots[i].classList.remove('active'); delete slots[i].dataset.name; delete slots[i].dataset.plat; saveLayout(); }
+        function clearAll() { slots.forEach((s, i) => clearSlot(i)); localStorage.removeItem('activeLayout'); }
+        function toggleSidebar() { const sb = document.getElementById('sidebar'); sb.classList.toggle('collapsed'); document.getElementById('toggleBtn').innerText = sb.classList.contains('collapsed') ? ">" : "<"; }
+        
+        initSlots();
+    </script>
+</body>
+</html>
