@@ -7,15 +7,20 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #0e0e10; color: #efeff1; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
         .main-layout { display: flex; width: 100vw; height: 100vh; position: relative; }
-        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; display: flex; flex-direction: column; padding: 15px; gap: 10px; z-index: 10; transition: margin-left 0.3s; position: relative; overflow-y: auto; }
+
+        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; z-index: 10; transition: margin-left 0.3s; position: relative; }
         .sidebar.collapsed { margin-left: -320px; }
         .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: margin-right 0.3s; }
         .right-sidebar.collapsed { margin-right: -320px; margin-left: 0; }
+
+        /* Sisältö vierittyy omassa laatikossaan -> piilotusnappi (joka pistää ulos palkin reunasta)
+           ei koskaan leikkaudu pois overflow:auto:n takia */
+        .sidebar-content { display: flex; flex-direction: column; gap: 10px; padding: 15px; height: 100%; overflow-y: auto; box-sizing: border-box; }
+
         .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
         .toggle-btn-right { position: absolute; left: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-right: none; color: white; cursor: pointer; z-index: 100; }
 
         .list-header { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        #activeContent { display: block; }
 
         .btn-group { display: flex; gap: 5px; }
         .btn-sm { flex: 1; padding: 8px; background: #26262b; color: white; border: 1px solid #3a3a3d; cursor: pointer; border-radius: 4px; }
@@ -29,18 +34,21 @@
         .hint-link:hover { color: #53fc18; }
         .hint-text { font-size: 11px; color: #666; line-height: 1.4; }
 
-        #activeList, #channelList { overflow-y: auto; margin-top: 5px; }
-        .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
+        .history-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .history-chip { background: #26262b; border: 1px solid #3a3a3d; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 12px; cursor: pointer; }
+        .history-chip:hover { background: #333; color: #fff; }
+
         .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
         .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-        .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+        .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
+        .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; }
+
+        .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
 
         .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #555; }
         .status-dot.live { background: #53fc18; box-shadow: 0 0 4px #53fc18; }
         .status-dot.offline { background: #eb0400; }
         .status-dot.unknown { background: #444; border: 1px solid #666; }
-
-        .tier-select { padding: 2px 2px; font-size: 12px; width: 40px; flex-shrink: 0; }
 
         .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
         .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -57,7 +65,6 @@
         .stream-slot:hover .stream-label { opacity: 1; }
         iframe { width: 100%; height: 100%; border: none; }
 
-        /* Estää iframea kaappaamasta raahaustapahtumia -> mahdollistaa pudotuksen toisen livestriimin päälle */
         body.dragging-active iframe { pointer-events: none; }
     </style>
 </head>
@@ -65,55 +72,61 @@
     <div class="main-layout">
         <div class="sidebar" id="sidebar">
             <button class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()">◀</button>
-            <div class="btn-group">
-                <button id="btn-1" class="btn-sm" onclick="changeGridMode(1)">1x1</button>
-                <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
-                <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
+            <div class="sidebar-content">
+                <div class="btn-group">
+                    <button id="btn-1" class="btn-sm" onclick="changeGridMode(1)">1x1</button>
+                    <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
+                    <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
+                    <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
+                </div>
+                <div class="manual-add-box">
+                    <select id="platform">
+                        <option value="kick">Kick</option>
+                        <option value="twitch">Twitch</option>
+                    </select>
+                    <input type="text" id="channelInput" placeholder="Nimi..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
+                    <button class="btn-add" onclick="processNewChannel()">Lisää</button>
+                </div>
+                <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
+                <div id="activeContent"><div id="activeList"></div></div>
+                <div class="list-header" style="cursor: default;">Tallennetut kanavat - Twitch</div>
+                <div id="channelListTwitch"></div>
+                <div class="list-header" style="cursor: default; margin-top: 10px;">Tallennetut kanavat - Kick</div>
+                <div id="channelListKick"></div>
             </div>
-            <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
-                <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
-            </div>
-            <div class="manual-add-box">
-                <select id="platform">
-                    <option value="kick">Kick</option>
-                    <option value="twitch">Twitch</option>
-                </select>
-                <input type="text" id="channelInput" placeholder="Nimi..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
-                <button class="btn-add" onclick="processNewChannel()">Lisää</button>
-            </div>
-            <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
-            <div id="activeContent"><div id="activeList"></div></div>
-            <div class="list-header" style="cursor: default;">Tallennetut kanavat</div>
-            <div id="channelList"></div>
         </div>
 
         <div class="grid-container" id="streamGrid"></div>
 
         <div class="sidebar right-sidebar" id="rightSidebar">
             <button class="toggle-btn-right" id="toggleBtnRight" onclick="toggleRightSidebar()">▶</button>
+            <div class="sidebar-content">
+                <div class="list-header" style="cursor:default;">Twitch-tunnukset</div>
+                <div class="manual-add-box">
+                    <input type="password" id="twitchClientId" placeholder="Client-ID">
+                    <input type="password" id="twitchToken" placeholder="Access Token">
+                    <button class="btn-add" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                    <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
+                </div>
 
-            <div class="list-header" style="cursor:default;">Twitch-tunnukset</div>
-            <div class="manual-add-box">
-                <input type="text" id="twitchClientId" placeholder="Client-ID">
-                <input type="text" id="twitchToken" placeholder="Access Token">
-                <button class="btn-add" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
-                <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
-            </div>
+                <div class="list-header" style="cursor:default; margin-top:10px;">Selaa kategoriaa (Twitch)</div>
+                <div class="manual-add-box">
+                    <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
+                    <button class="btn-add" onclick="searchTwitchCategory()">Hae livenä olevat</button>
+                    <div class="history-list" id="categoryHistoryList"></div>
+                </div>
+                <div id="categoryResults" style="font-size:13px; color:#888;"></div>
+                <div class="hint-text">Kickin kategoriahaku vaatisi täyden OAuth-kirjautumisen palvelimen kautta, joten se ei valitettavasti onnistu ilman backendiä pelkässä HTML-tiedostossa.</div>
 
-            <div class="list-header" style="cursor:default; margin-top:10px;">Selaa kategoriaa (Twitch)</div>
-            <div class="manual-add-box">
-                <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
-                <button class="btn-add" onclick="searchTwitchCategory()">Hae livenä olevat</button>
+                <div class="list-header" style="cursor:default; margin-top:10px;">
+                    <span>Live-tilat (tallennetut, Twitch)</span>
+                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
+                </div>
+                <div class="hint-text">Päivittyy automaattisesti 2 min välein tunnusten ollessa asetettuna. Harmaa pallo = tila ei tiedossa (Kick, tai Twitch jota ei ole vielä päivitetty).</div>
             </div>
-            <div id="categoryResults" style="overflow-y:auto; margin-top:5px; font-size:13px; color:#888;"></div>
-            <div class="hint-text">Kickin kategoriahaku vaatisi täyden OAuth-kirjautumisen palvelimen kautta, joten se ei valitettavasti onnistu ilman backendiä pelkässä HTML-tiedostossa.</div>
-
-            <div class="list-header" style="cursor:default; margin-top:10px;">
-                <span>Live-tilat (tallennetut, Twitch)</span>
-                <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
-            </div>
-            <div class="hint-text">Harmaa pallo = tila ei tiedossa (Kick, tai Twitch jota ei ole vielä päivitetty).</div>
         </div>
     </div>
 
@@ -128,11 +141,10 @@
             if (Array.isArray(raw)) savedChannels = raw;
         } catch (e) { savedChannels = []; }
 
-        // Migraatio: vanhat tallennukset eivät sisältäneet tier/isLive/lastClosedLiveAt -kenttiä
+        // Migraatio: pudotetaan vanha tier-kenttä, varmistetaan muut kentät
         savedChannels = savedChannels.map(c => ({
             name: c.name,
             plat: c.plat,
-            tier: c.tier || null,
             lastClosedLiveAt: c.lastClosedLiveAt || 0,
             isLive: (typeof c.isLive === 'boolean') ? c.isLive : null
         }));
@@ -142,6 +154,12 @@
             const rawCreds = JSON.parse(localStorage.getItem('twitchCreds'));
             if (rawCreds) twitchCreds = rawCreds;
         } catch (e) { twitchCreds = { clientId: '', token: '' }; }
+
+        let categoryHistory = [];
+        try {
+            const rawHist = JSON.parse(localStorage.getItem('categoryHistory'));
+            if (Array.isArray(rawHist)) categoryHistory = rawHist;
+        } catch (e) { categoryHistory = []; }
 
         let slots = [];
 
@@ -197,7 +215,7 @@
         function toggleSavedFromPlayer(name, plat, btnEl) {
             const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
             if (idx === -1) {
-                savedChannels.push({ name, plat, tier: null, lastClosedLiveAt: 0, isLive: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null });
                 if (btnEl) btnEl.classList.add('favorited');
             } else {
                 savedChannels.splice(idx, 1);
@@ -229,7 +247,6 @@
             updateGridDisplay();
             renderLists();
             restoreStreams();
-            if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus();
         }
 
         function toggleActiveList() {
@@ -268,7 +285,6 @@
         }
 
         function sortSavedChannels(list) {
-            const tierOrder = ['S', 'A', 'B', 'C', 'D', 'E', 'F'];
             return [...list].sort((a, b) => {
                 // 1. Varmistetusti livenä olevat ylimmäs
                 const aLive = a.isLive === true ? 1 : 0;
@@ -285,22 +301,22 @@
                 const bTime = b.lastClosedLiveAt || 0;
                 if (aTime !== bTime) return bTime - aTime;
 
-                // 4. Tier-järjestys S -> F
-                const aTier = a.tier ? tierOrder.indexOf(a.tier) : 99;
-                const bTier = b.tier ? tierOrder.indexOf(b.tier) : 99;
-                if (aTier !== bTier) return aTier - bTier;
-
-                // 5. Aakkosjärjestys
+                // 4. Aakkosjärjestys
                 return a.name.localeCompare(b.name);
             });
         }
 
         function renderSavedList() {
-            const list = document.getElementById('channelList');
-            list.innerHTML = "";
             const activeNames = slots.map(s => s.dataset.name);
             const visible = savedChannels.filter(c => !activeNames.includes(c.name));
-            const sorted = sortSavedChannels(visible);
+            renderSavedListForPlatform(visible.filter(c => c.plat === 'twitch'), 'channelListTwitch');
+            renderSavedListForPlatform(visible.filter(c => c.plat === 'kick'), 'channelListKick');
+        }
+
+        function renderSavedListForPlatform(list, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            const sorted = sortSavedChannels(list);
 
             sorted.forEach(c => {
                 const row = document.createElement('div');
@@ -319,27 +335,10 @@
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
-                nameSpan.textContent = `${c.name} (${c.plat})`;
+                nameSpan.textContent = c.name;
                 left.appendChild(nameSpan);
 
                 row.appendChild(left);
-
-                const tierSelect = document.createElement('select');
-                tierSelect.className = 'tier-select';
-                ['', 'S', 'A', 'B', 'C', 'D', 'E', 'F'].forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t;
-                    opt.textContent = t === '' ? '–' : t;
-                    if ((c.tier || '') === t) opt.selected = true;
-                    tierSelect.appendChild(opt);
-                });
-                tierSelect.addEventListener('click', (e) => e.stopPropagation());
-                tierSelect.addEventListener('change', (e) => {
-                    c.tier = e.target.value || null;
-                    persistSavedChannels();
-                    renderSavedList();
-                });
-                row.appendChild(tierSelect);
 
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'close-btn';
@@ -349,7 +348,7 @@
 
                 row.addEventListener('click', () => processNewChannelManual(c.name, c.plat));
 
-                list.appendChild(row);
+                container.appendChild(row);
             });
         }
 
@@ -478,8 +477,6 @@
             const newVisibleCount = gridMode * gridMode;
             updateGridDisplay();
 
-            // Mykistetään uudelleen VAIN ne slotit jotka olivat piilossa ja tulevat nyt näkyviin.
-            // Jo näkyvissä olleita striimejä ei kosketa -> ei turhia uudelleenlatauksia.
             if (newVisibleCount > oldVisibleCount) {
                 for (let i = oldVisibleCount; i < newVisibleCount; i++) {
                     if (slots[i].dataset.name) {
@@ -539,7 +536,7 @@
             const plat = document.getElementById('platform').value;
             if (!name) return;
             if (!savedChannels.find(c => c.name === name)) {
-                savedChannels.push({ name, plat, tier: null, lastClosedLiveAt: 0, isLive: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null });
                 persistSavedChannels();
             }
             for (let i = 0; i < slots.length; i++) {
@@ -587,7 +584,6 @@
             const plat = slots[i].dataset.plat;
             if (name) {
                 const entry = savedChannels.find(c => c.name === name && c.plat === plat);
-                // Jos suljetaan striimi joka oli auki (eikä varmistetusti offline), nostetaan se ylimmäiseksi
                 if (entry && entry.isLive !== false) {
                     entry.lastClosedLiveAt = Date.now();
                     persistSavedChannels();
@@ -609,13 +605,38 @@
             localStorage.removeItem('activeLayout');
         }
 
-        // ---------- Twitch API: tunnukset, kategoriahaku, live-tilan päivitys ----------
+        // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan päivitys ----------
 
         function saveTwitchCreds() {
             twitchCreds.clientId = document.getElementById('twitchClientId').value.trim();
             twitchCreds.token = document.getElementById('twitchToken').value.trim();
             localStorage.setItem('twitchCreds', JSON.stringify(twitchCreds));
             alert('Twitch-tunnukset tallennettu selaimen muistiin.');
+        }
+
+        function addToCategoryHistory(term) {
+            const clean = term.trim();
+            if (!clean) return;
+            categoryHistory = categoryHistory.filter(t => t.toLowerCase() !== clean.toLowerCase());
+            categoryHistory.unshift(clean);
+            if (categoryHistory.length > 15) categoryHistory = categoryHistory.slice(0, 15);
+            localStorage.setItem('categoryHistory', JSON.stringify(categoryHistory));
+            renderCategoryHistory();
+        }
+
+        function renderCategoryHistory() {
+            const box = document.getElementById('categoryHistoryList');
+            box.innerHTML = '';
+            categoryHistory.forEach(term => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'history-chip';
+                chip.textContent = term;
+                chip.addEventListener('click', () => {
+                    document.getElementById('categoryInput').value = term;
+                });
+                box.appendChild(chip);
+            });
         }
 
         async function searchTwitchCategory() {
@@ -627,6 +648,7 @@
             }
             const query = document.getElementById('categoryInput').value.trim();
             if (!query) return;
+            addToCategoryHistory(query);
             resultsBox.textContent = 'Haetaan...';
 
             try {
@@ -660,13 +682,20 @@
                     const left = document.createElement('span');
                     left.className = 'left-group';
 
+                    const thumb = document.createElement('img');
+                    thumb.className = 'stream-thumb';
+                    thumb.src = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45');
+                    thumb.alt = '';
+                    thumb.loading = 'lazy';
+                    left.appendChild(thumb);
+
                     const dot = document.createElement('span');
                     dot.className = 'status-dot live';
                     left.appendChild(dot);
 
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'name-text';
-                    nameSpan.textContent = `${s.user_name} (${s.viewer_count.toLocaleString('fi-FI')} katsojaa)`;
+                    nameSpan.textContent = `${s.user_name} (${s.viewer_count.toLocaleString('fi-FI')})`;
                     left.appendChild(nameSpan);
 
                     item.appendChild(left);
@@ -678,9 +707,9 @@
             }
         }
 
-        async function refreshTwitchLiveStatus() {
+        async function refreshTwitchLiveStatus(silent = false) {
             if (!twitchCreds.clientId || !twitchCreds.token) {
-                alert('Lisää ensin Twitchin Client-ID ja Access Token oikean laidan valikossa.');
+                if (!silent) alert('Lisää ensin Twitchin Client-ID ja Access Token oikean laidan valikossa.');
                 return;
             }
             const twitchLogins = savedChannels.filter(c => c.plat === 'twitch').map(c => c.name);
@@ -706,11 +735,24 @@
                 persistSavedChannels();
                 renderSavedList();
             } catch (err) {
-                alert('Live-tilan haku epäonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
+                if (!silent) {
+                    alert('Live-tilan haku epäonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
+                } else {
+                    console.warn('Automaattinen live-tilan päivitys epäonnistui:', err.message);
+                }
             }
         }
 
+        // ---------- Käynnistys ----------
+
+        document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
+        document.getElementById('twitchToken').value = twitchCreds.token || '';
+        renderCategoryHistory();
         initSlots();
+        if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
+        setInterval(() => {
+            if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
+        }, 2 * 60 * 1000);
     </script>
 </body>
 </html>
