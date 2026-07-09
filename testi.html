@@ -13,26 +13,30 @@
         .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: margin-right 0.3s; }
         .right-sidebar.collapsed { margin-right: -320px; margin-left: 0; }
 
-        /* Sisältö vierittyy omassa laatikossaan -> piilotusnappi (joka pistää ulos palkin reunasta)
-           ei koskaan leikkaudu pois overflow:auto:n takia */
-        .sidebar-content { display: flex; flex-direction: column; gap: 10px; padding: 15px; height: 100%; overflow-y: auto; box-sizing: border-box; }
+        /* Koko palkki EI vierity - vain yksittäiset laatikot sisällä vierittävät omaa sisältöään */
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; padding: 15px; height: 100%; overflow: hidden; box-sizing: border-box; }
 
         .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
         .toggle-btn-right { position: absolute; left: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-right: none; color: white; cursor: pointer; z-index: 100; }
 
-        .list-header { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .list-header { font-size: 12px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; flex-shrink: 0; }
 
-        .btn-group { display: flex; gap: 5px; }
+        /* Yksittäisen listan oma vierityslaatikko */
+        .list-scroll-box { max-height: 150px; overflow-y: auto; flex-shrink: 0; }
+        /* Viimeisin laatikko venyy täyttämään jäljellä olevan tilan pohjaan asti */
+        .list-scroll-box.grow { flex: 1 1 auto; max-height: none; min-height: 50px; }
+
+        .btn-group { display: flex; gap: 5px; flex-shrink: 0; }
         .btn-sm { flex: 1; padding: 8px; background: #26262b; color: white; border: 1px solid #3a3a3d; cursor: pointer; border-radius: 4px; }
         .btn-sm.active { background: #53fc18; color: #000; font-weight: bold; }
         .btn-danger { background: #eb0400; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
         .btn-mute { background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
-        .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; }
+        .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
         input, select, button { background: #1f1f23; color: #fff; border: 1px solid #3a3a3d; padding: 8px; border-radius: 4px; font-family: inherit; }
         .btn-add { background: #53fc18; color: #000; font-weight: bold; cursor: pointer; }
         .hint-link { font-size: 11px; color: #888; text-decoration: none; }
         .hint-link:hover { color: #53fc18; }
-        .hint-text { font-size: 11px; color: #666; line-height: 1.4; }
+        .hint-text { font-size: 11px; color: #666; line-height: 1.4; flex-shrink: 0; }
 
         .history-list { display: flex; flex-wrap: wrap; gap: 4px; }
         .history-chip { background: #26262b; border: 1px solid #3a3a3d; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 12px; cursor: pointer; }
@@ -78,7 +82,7 @@
                     <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
                     <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
                 </div>
-                <div style="display: flex; gap: 5px;">
+                <div style="display: flex; gap: 5px; flex-shrink: 0;">
                     <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
                     <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
                 </div>
@@ -90,12 +94,15 @@
                     <input type="text" id="channelInput" placeholder="Nimi..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
                     <button class="btn-add" onclick="processNewChannel()">Lisää</button>
                 </div>
+
                 <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
-                <div id="activeContent"><div id="activeList"></div></div>
-                <div class="list-header" style="cursor: default;">Tallennetut kanavat - Twitch</div>
-                <div id="channelListTwitch"></div>
-                <div class="list-header" style="cursor: default; margin-top: 10px;">Tallennetut kanavat - Kick</div>
-                <div id="channelListKick"></div>
+                <div id="activeContent" class="list-scroll-box"><div id="activeList"></div></div>
+
+                <div class="list-header" onclick="toggleCollapsible('twitchListWrap','twitchToggleIcon')">Tallennetut kanavat - Twitch <span id="twitchToggleIcon">▼</span></div>
+                <div id="twitchListWrap" class="list-scroll-box"><div id="channelListTwitch"></div></div>
+
+                <div class="list-header" onclick="toggleCollapsible('kickListWrap','kickToggleIcon')">Tallennetut kanavat - Kick <span id="kickToggleIcon">▼</span></div>
+                <div id="kickListWrap" class="list-scroll-box grow"><div id="channelListKick"></div></div>
             </div>
         </div>
 
@@ -112,20 +119,21 @@
                     <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
                 </div>
 
-                <div class="list-header" style="cursor:default; margin-top:10px;">Selaa kategoriaa (Twitch)</div>
+                <div class="list-header" style="cursor:default;">
+                    <span>Live-tilat (tallennetut, Twitch)</span>
+                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
+                </div>
+                <div class="hint-text">Päivittyy automaattisesti 2 min välein tunnusten ollessa asetettuna. Harmaa pallo = tila ei tiedossa.</div>
+
+                <div class="list-header" style="cursor:default;">Selaa kategoriaa (Twitch)</div>
                 <div class="manual-add-box">
                     <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
                     <button class="btn-add" onclick="searchTwitchCategory()">Hae livenä olevat</button>
                     <div class="history-list" id="categoryHistoryList"></div>
                 </div>
-                <div id="categoryResults" style="font-size:13px; color:#888;"></div>
                 <div class="hint-text">Kickin kategoriahaku vaatisi täyden OAuth-kirjautumisen palvelimen kautta, joten se ei valitettavasti onnistu ilman backendiä pelkässä HTML-tiedostossa.</div>
 
-                <div class="list-header" style="cursor:default; margin-top:10px;">
-                    <span>Live-tilat (tallennetut, Twitch)</span>
-                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
-                </div>
-                <div class="hint-text">Päivittyy automaattisesti 2 min välein tunnusten ollessa asetettuna. Harmaa pallo = tila ei tiedossa (Kick, tai Twitch jota ei ole vielä päivitetty).</div>
+                <div id="categoryResults" class="list-scroll-box grow" style="font-size:13px; color:#888;"></div>
             </div>
         </div>
     </div>
@@ -141,7 +149,6 @@
             if (Array.isArray(raw)) savedChannels = raw;
         } catch (e) { savedChannels = []; }
 
-        // Migraatio: pudotetaan vanha tier-kenttä, varmistetaan muut kentät
         savedChannels = savedChannels.map(c => ({
             name: c.name,
             plat: c.plat,
@@ -166,6 +173,17 @@
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
         }
+
+        // ---------- Kokoontaitettavat osiot (yleinen apufunktio) ----------
+
+        function toggleCollapsible(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            icon.innerText = content.style.display === 'none' ? '▲' : '▼';
+        }
+
+        function toggleActiveList() { toggleCollapsible('activeContent', 'toggleIcon'); }
 
         // ---------- Slottien ohjauspainikkeet (raahaus, sydän, X) ----------
 
@@ -249,13 +267,6 @@
             restoreStreams();
         }
 
-        function toggleActiveList() {
-            const content = document.getElementById('activeContent');
-            const icon = document.getElementById('toggleIcon');
-            content.style.display = content.style.display === 'none' ? 'block' : 'none';
-            icon.innerText = content.style.display === 'none' ? '▲' : '▼';
-        }
-
         function toggleSidebar() {
             const sb = document.getElementById('sidebar');
             sb.classList.toggle('collapsed');
@@ -286,22 +297,18 @@
 
         function sortSavedChannels(list) {
             return [...list].sort((a, b) => {
-                // 1. Varmistetusti livenä olevat ylimmäs
                 const aLive = a.isLive === true ? 1 : 0;
                 const bLive = b.isLive === true ? 1 : 0;
                 if (aLive !== bLive) return bLive - aLive;
 
-                // 2. Varmistetusti offline putoaa alimmaiseksi
                 const aOff = a.isLive === false ? 1 : 0;
                 const bOff = b.isLive === false ? 1 : 0;
                 if (aOff !== bOff) return aOff - bOff;
 
-                // 3. Viimeksi livenä suljettu -> ylemmäs
                 const aTime = a.lastClosedLiveAt || 0;
                 const bTime = b.lastClosedLiveAt || 0;
                 if (aTime !== bTime) return bTime - aTime;
 
-                // 4. Aakkosjärjestys
                 return a.name.localeCompare(b.name);
             });
         }
@@ -709,7 +716,7 @@
 
         async function refreshTwitchLiveStatus(silent = false) {
             if (!twitchCreds.clientId || !twitchCreds.token) {
-                if (!silent) alert('Lisää ensin Twitchin Client-ID ja Access Token oikean laidan valikossa.');
+                if (!silent) alert('Lisää ensin Twitchin Client-ID ja Access Token yllä.');
                 return;
             }
             const twitchLogins = savedChannels.filter(c => c.plat === 'twitch').map(c => c.name);
