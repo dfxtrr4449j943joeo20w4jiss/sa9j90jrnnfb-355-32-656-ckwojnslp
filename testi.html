@@ -18,7 +18,11 @@
         .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
         .toggle-btn-right { position: absolute; left: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-right: none; color: white; cursor: pointer; z-index: 100; }
 
-        .list-header { font-size: 12px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; flex-shrink: 0; }
+        .list-header { font-size: 12px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; gap: 6px; }
+        .collapse-trigger { cursor: pointer; display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+
+        .help-btn { width: 18px; height: 18px; border-radius: 50%; background: #26262b; border: 1px solid #3a3a3d; color: #999; font-size: 11px; font-weight: bold; cursor: help; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; }
+        .help-btn:hover { background: #333; color: #fff; }
 
         .list-scroll-box { overflow-y: auto; overflow-x: hidden; }
         .list-scroll-box.resizable { min-height: 150px; height: 150px; flex-shrink: 0; resize: vertical; border: 1px solid #26262b; border-radius: 4px; }
@@ -54,7 +58,11 @@
         .auto-refresh-toggle input:checked + .toggle-slider::before { transform: translateX(15px); }
         #autoRefreshCountdown { white-space: nowrap; }
 
-        .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+        .platform-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 9px; font-weight: bold; flex-shrink: 0; line-height: 1; }
+        .platform-badge.platform-twitch { background: #9146ff; color: #fff; }
+        .platform-badge.platform-kick { background: #53fc18; color: #000; }
+
+        .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
         .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
         .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; cursor: pointer; }
@@ -80,7 +88,7 @@
         .heart-btn.favorited { color: #eb0400; }
 
         .stream-wrapper { width: 100%; height: 100%; display: flex; position: relative; }
-        .stream-label { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.8); padding: 4px 8px; color: #53fc18; font-weight: bold; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.2s; }
+        .stream-label { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.8); padding: 4px 8px; color: #53fc18; font-weight: bold; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; gap: 4px; }
         .stream-slot:hover .stream-label { opacity: 1; }
         iframe { width: 100%; height: 100%; border: none; }
 
@@ -112,13 +120,13 @@
                     <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()">Lisää</button>
                 </div>
 
-                <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></span></div>
                 <div id="activeContent" class="list-scroll-box resizable"><div id="activeList"></div></div>
 
-                <div class="list-header" onclick="toggleCollapsible('twitchListWrap','twitchToggleIcon')">Tallennetut kanavat - Twitch <span id="twitchToggleIcon">▼</span></div>
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleCollapsible('twitchListWrap','twitchToggleIcon')">Tallennetut kanavat - Twitch <span id="twitchToggleIcon">▼</span></span></div>
                 <div id="twitchListWrap" class="list-scroll-box resizable"><div id="channelListTwitch"></div></div>
 
-                <div class="list-header" onclick="toggleCollapsible('kickListWrap','kickToggleIcon')">Tallennetut kanavat - Kick <span id="kickToggleIcon">▼</span></div>
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleCollapsible('kickListWrap','kickToggleIcon')">Tallennetut kanavat - Kick <span id="kickToggleIcon">▼</span></span></div>
                 <div id="kickListWrap" class="list-scroll-box resizable"><div id="channelListKick"></div></div>
             </div>
         </div>
@@ -128,50 +136,65 @@
         <div class="sidebar right-sidebar" id="rightSidebar">
             <button class="toggle-btn-right" id="toggleBtnRight" onclick="toggleRightSidebar()">▶</button>
             <div class="sidebar-content">
-                <div class="list-header" style="cursor:default;">Twitch-tunnukset</div>
-                <div class="manual-add-box">
-                    <input type="password" id="twitchClientId" placeholder="Client-ID">
-                    <input type="password" id="twitchToken" placeholder="Access Token">
-                    <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
-                    <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
+
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('twitchCredsBody','twitchCredsIcon')">Twitch-tunnukset <span id="twitchCredsIcon">▼</span></span>
+                </div>
+                <div id="twitchCredsBody">
+                    <div class="manual-add-box">
+                        <input type="password" id="twitchClientId" placeholder="Client-ID">
+                        <input type="password" id="twitchToken" placeholder="Access Token">
+                        <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                        <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
+                    </div>
                 </div>
 
-                <div class="list-header" style="cursor:default;">
-                    <span>Live-tilat (tallennetut, Twitch)</span>
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat (Twitch) <span id="liveStatusIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~5 minuutiksi ettei se palaa heti takaisin. Toimii vain Twitch-kanaville ja vaatii Automaattisen päivityksen olevan päällä.">?</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
-                <div class="auto-refresh-row">
-                    <label class="auto-refresh-toggle">
-                        <input type="checkbox" id="autoRefreshToggle" checked onchange="onAutoRefreshToggleChange()">
-                        <span class="toggle-slider"></span>
-                        <span>Automaattinen päivitys</span>
-                    </label>
-                    <span id="autoRefreshCountdown" class="hint-text"></span>
-                </div>
-                <div class="auto-refresh-row">
-                    <label class="auto-refresh-toggle">
-                        <input type="checkbox" id="autoFillToggle" onchange="onAutoFillToggleChange()">
-                        <span class="toggle-slider"></span>
-                        <span>Täytä paikat automaattisesti</span>
-                    </label>
-                </div>
-                <div class="hint-text">Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.<br>Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~5 minuutiksi ettei se palaa heti takaisin. Toimii vain Twitch-kanaville ja vaatii "Automaattisen päivityksen" olevan päällä.</div>
-
-                <div class="list-header" style="cursor:default;">Asetusten varmuuskopiointi</div>
-                <div class="manual-add-box">
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn-sm" style="flex:1;" onclick="exportSettings()">Vie asetukset</button>
-                        <button class="btn-sm" style="flex:1;" onclick="triggerImportFile()">Tuo asetukset</button>
+                <div id="liveStatusBody">
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="autoRefreshToggle" checked onchange="onAutoRefreshToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Automaattinen päivitys</span>
+                        </label>
+                        <span id="autoRefreshCountdown" class="hint-text"></span>
                     </div>
-                    <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importSettings(event)">
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="autoFillToggle" onchange="onAutoFillToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Täytä paikat automaattisesti</span>
+                        </label>
+                    </div>
                 </div>
-                <div class="hint-text">Sisältää mm. tallennetut kanavat ja Twitch-tunnukset selkokielisenä tiedostossa — säilytä varovasti äläkä jaa muille.</div>
 
-                <div class="list-header" style="cursor:default;">Selaa kategoriaa (Twitch)</div>
-                <div class="manual-add-box">
-                    <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
-                    <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
-                    <div class="history-list" id="categoryHistoryList"></div>
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('backupBody','backupIcon')">Asetusten varmuuskopiointi <span id="backupIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Sisältää mm. tallennetut kanavat ja Twitch-tunnukset selkokielisenä tiedostossa — säilytä tiedostoa varovasti äläkä jaa sitä muille.">?</button>
+                </div>
+                <div id="backupBody">
+                    <div class="manual-add-box">
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-sm" style="flex:1;" onclick="exportSettings()">Vie asetukset</button>
+                            <button class="btn-sm" style="flex:1;" onclick="triggerImportFile()">Tuo asetukset</button>
+                        </div>
+                        <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importSettings(event)">
+                    </div>
+                </div>
+
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch) <span id="categorySearchIcon">▼</span></span>
+                </div>
+                <div id="categorySearchBody">
+                    <div class="manual-add-box">
+                        <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
+                        <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
+                        <div class="history-list" id="categoryHistoryList"></div>
+                    </div>
                 </div>
 
                 <div id="categoryResults" class="list-scroll-box grow" style="font-size:13px; color:#888;"></div>
@@ -227,6 +250,27 @@
 
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
+        }
+
+        // ---------- Alustaikonit (ei virallisia logoja - värilliset kirjainmerkit) ----------
+
+        function createPlatformBadge(plat) {
+            const badge = document.createElement('span');
+            badge.className = 'platform-badge ' + (plat === 'twitch' ? 'platform-twitch' : 'platform-kick');
+            badge.textContent = plat === 'twitch' ? 'T' : 'K';
+            badge.title = plat === 'twitch' ? 'Twitch' : 'Kick';
+            return badge;
+        }
+
+        function createStreamLabel(idx, name, plat) {
+            const label = document.createElement('div');
+            label.className = 'stream-label';
+            label.appendChild(createPlatformBadge(plat));
+            const textSpan = document.createElement('span');
+            textSpan.className = 'stream-label-text';
+            textSpan.textContent = `${idx + 1}. ${name}`;
+            label.appendChild(textSpan);
+            return label;
         }
 
         // ---------- Lisää-napin väri alustan mukaan ----------
@@ -298,6 +342,7 @@
             handle.className = 'drag-handle';
             handle.draggable = true;
             handle.textContent = '☰';
+            handle.title = 'Siirrä';
             handle.addEventListener('dragstart', (e) => drag(e, idx));
             handle.addEventListener('dragend', dragEnd);
             controls.appendChild(handle);
@@ -312,6 +357,7 @@
             handle.className = 'drag-handle';
             handle.draggable = true;
             handle.textContent = '☰';
+            handle.title = 'Siirrä striimi';
             handle.addEventListener('dragstart', (e) => drag(e, idx));
             handle.addEventListener('dragend', dragEnd);
             controls.appendChild(handle);
@@ -328,6 +374,7 @@
             const closeBtn = document.createElement('button');
             closeBtn.className = 'close-btn';
             closeBtn.textContent = 'X';
+            closeBtn.title = 'Sulje striimi';
             closeBtn.addEventListener('click', () => clearSlot(idx));
             controls.appendChild(closeBtn);
 
@@ -436,6 +483,8 @@
                 const left = document.createElement('span');
                 left.className = 'left-group';
 
+                left.appendChild(createPlatformBadge(c.plat));
+
                 const dot = document.createElement('span');
                 const statusClass = c.isLive === true ? 'live' : (c.isLive === false ? 'offline' : 'unknown');
                 dot.className = 'status-dot ' + statusClass;
@@ -501,10 +550,7 @@
             const wrapper = document.createElement('div');
             wrapper.className = 'stream-wrapper';
 
-            const label = document.createElement('div');
-            label.className = 'stream-label';
-            label.textContent = `${idx + 1}. ${name}`;
-            wrapper.appendChild(label);
+            wrapper.appendChild(createStreamLabel(idx, name, plat));
 
             const iframe = document.createElement('iframe');
             iframe.src = url;
@@ -524,7 +570,7 @@
             const wrapper = fromSlot.querySelector('.stream-wrapper');
             if (!wrapper) return;
 
-            const label = wrapper.querySelector('.stream-label');
+            const labelText = wrapper.querySelector('.stream-label-text');
             const name = fromSlot.dataset.name;
             const plat = fromSlot.dataset.plat;
 
@@ -533,7 +579,7 @@
             toSlot.appendChild(wrapper);
             toSlot.dataset.name = name;
             toSlot.dataset.plat = plat;
-            if (label) label.textContent = `${toIdx + 1}. ${name}`;
+            if (labelText) labelText.textContent = `${toIdx + 1}. ${name}`;
             toSlot.classList.add('active');
 
             fromSlot.innerHTML = '';
@@ -553,21 +599,21 @@
             const bWrapper = bSlot.querySelector('.stream-wrapper');
             const aName = aSlot.dataset.name, aPlat = aSlot.dataset.plat;
             const bName = bSlot.dataset.name, bPlat = bSlot.dataset.plat;
-            const aLabel = aWrapper.querySelector('.stream-label');
-            const bLabel = bWrapper.querySelector('.stream-label');
+            const aLabelText = aWrapper.querySelector('.stream-label-text');
+            const bLabelText = bWrapper.querySelector('.stream-label-text');
 
             aSlot.innerHTML = '';
             aSlot.appendChild(buildActiveControls(aIdx, bName, bPlat));
             aSlot.appendChild(bWrapper);
             aSlot.dataset.name = bName; aSlot.dataset.plat = bPlat;
-            if (bLabel) bLabel.textContent = `${aIdx + 1}. ${bName}`;
+            if (bLabelText) bLabelText.textContent = `${aIdx + 1}. ${bName}`;
             aSlot.classList.add('active');
 
             bSlot.innerHTML = '';
             bSlot.appendChild(buildActiveControls(bIdx, aName, aPlat));
             bSlot.appendChild(aWrapper);
             bSlot.dataset.name = aName; bSlot.dataset.plat = aPlat;
-            if (aLabel) aLabel.textContent = `${bIdx + 1}. ${aName}`;
+            if (aLabelText) aLabelText.textContent = `${bIdx + 1}. ${aName}`;
             bSlot.classList.add('active');
         }
 
@@ -858,8 +904,21 @@
                 }
 
                 streamsData.data.forEach(s => {
-                    const item = document.createElement('div');
+                    const login = s.user_login.toLowerCase();
+
+                    // <a>-elementti: tavallinen klikkaus lataa playeriin, keski-/ctrl-klikkaus
+                    // avaa Twitch-kanavan uuteen välilehteen selaimen omalla natiivilla toiminnolla
+                    const item = document.createElement('a');
                     item.className = 'saved-channel';
+                    item.href = `https://www.twitch.tv/${login}`;
+                    item.target = '_blank';
+                    item.rel = 'noopener noreferrer';
+                    item.addEventListener('click', (e) => {
+                        if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                            e.preventDefault();
+                            loadFromCategorySearch(login, 'twitch');
+                        }
+                    });
 
                     const left = document.createElement('span');
                     left.className = 'left-group';
@@ -876,6 +935,8 @@
                     thumb.addEventListener('mouseleave', hideThumbPreview);
                     left.appendChild(thumb);
 
+                    left.appendChild(createPlatformBadge('twitch'));
+
                     const dot = document.createElement('span');
                     dot.className = 'status-dot live';
                     left.appendChild(dot);
@@ -886,7 +947,6 @@
                     left.appendChild(nameSpan);
 
                     item.appendChild(left);
-                    item.addEventListener('click', () => loadFromCategorySearch(s.user_login.toLowerCase(), 'twitch'));
                     resultsBox.appendChild(item);
                 });
             } catch (err) {
