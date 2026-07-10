@@ -32,7 +32,6 @@
         .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
         input, select, button { background: #1f1f23; color: #fff; border: 1px solid #3a3a3d; padding: 8px; border-radius: 4px; font-family: inherit; }
         .btn-add { color: #000; font-weight: bold; cursor: pointer; border: none; }
-        /* Alustakohtaiset väriteemat: Twitch = violetti, Kick = vihreä (Kickin oma brändivihreä) */
         .btn-twitch { background: #9146ff; color: #fff; }
         .btn-kick { background: #53fc18; color: #000; }
         .hint-link { font-size: 11px; color: #888; text-decoration: none; }
@@ -149,7 +148,24 @@
                     </label>
                     <span id="autoRefreshCountdown" class="hint-text"></span>
                 </div>
-                <div class="hint-text">Päivittää automaattisesti myös auki olevan kategoriahaun tulokset. Harmaa pallo = tila ei tiedossa.</div>
+                <div class="auto-refresh-row">
+                    <label class="auto-refresh-toggle">
+                        <input type="checkbox" id="autoFillToggle" onchange="onAutoFillToggleChange()">
+                        <span class="toggle-slider"></span>
+                        <span>Täytä paikat automaattisesti</span>
+                    </label>
+                </div>
+                <div class="hint-text">Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.<br>Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~5 minuutiksi ettei se palaa heti takaisin. Toimii vain Twitch-kanaville ja vaatii "Automaattisen päivityksen" olevan päällä.</div>
+
+                <div class="list-header" style="cursor:default;">Asetusten varmuuskopiointi</div>
+                <div class="manual-add-box">
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-sm" style="flex:1;" onclick="exportSettings()">Vie asetukset</button>
+                        <button class="btn-sm" style="flex:1;" onclick="triggerImportFile()">Tuo asetukset</button>
+                    </div>
+                    <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importSettings(event)">
+                </div>
+                <div class="hint-text">Sisältää mm. tallennetut kanavat ja Twitch-tunnukset selkokielisenä tiedostossa — säilytä varovasti äläkä jaa muille.</div>
 
                 <div class="list-header" style="cursor:default;">Selaa kategoriaa (Twitch)</div>
                 <div class="manual-add-box">
@@ -157,7 +173,6 @@
                     <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
                     <div class="history-list" id="categoryHistoryList"></div>
                 </div>
-                <div class="hint-text">Kickin kategoriahaku vaatisi täyden OAuth-kirjautumisen palvelimen kautta, joten se ei valitettavasti onnistu ilman backendiä pelkässä HTML-tiedostossa.</div>
 
                 <div id="categoryResults" class="list-scroll-box grow" style="font-size:13px; color:#888;"></div>
             </div>
@@ -179,7 +194,8 @@
             name: c.name,
             plat: c.plat,
             lastClosedLiveAt: c.lastClosedLiveAt || 0,
-            isLive: (typeof c.isLive === 'boolean') ? c.isLive : null
+            isLive: (typeof c.isLive === 'boolean') ? c.isLive : null,
+            viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null
         }));
 
         let twitchCreds = { clientId: '', token: '' };
@@ -204,6 +220,11 @@
         } catch (e) { autoRefreshEnabled = true; }
         let autoRefreshSecondsLeft = 120;
 
+        let autoFillEnabled = false;
+        try {
+            autoFillEnabled = localStorage.getItem('autoFillEnabled') === 'true';
+        } catch (e) { autoFillEnabled = false; }
+
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
         }
@@ -222,7 +243,7 @@
             }
         }
 
-        // ---------- Laatikoiden koon muistaminen (resize: vertical + ResizeObserver) ----------
+        // ---------- Laatikoiden koon muistaminen ----------
 
         function setupResizablePersistence(elId, storageKey) {
             const el = document.getElementById(elId);
@@ -268,7 +289,7 @@
             document.getElementById('thumbPreview').style.display = 'none';
         }
 
-        // ---------- Slottien ohjauspainikkeet (raahaus, sydän, X) ----------
+        // ---------- Slottien ohjauspainikkeet ----------
 
         function buildEmptyControls(idx) {
             const controls = document.createElement('div');
@@ -316,7 +337,7 @@
         function toggleSavedFromPlayer(name, plat, btnEl) {
             const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
             if (idx === -1) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null });
                 if (btnEl) btnEl.classList.add('favorited');
             } else {
                 savedChannels.splice(idx, 1);
@@ -425,7 +446,9 @@
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
-                nameSpan.textContent = c.name;
+                nameSpan.textContent = (c.isLive === true && typeof c.viewerCount === 'number')
+                    ? `${c.name} (${c.viewerCount.toLocaleString('fi-FI')})`
+                    : c.name;
                 left.appendChild(nameSpan);
 
                 row.appendChild(left);
@@ -626,7 +649,7 @@
             const plat = document.getElementById('platform').value;
             if (!name) return;
             if (!savedChannels.find(c => c.name === name)) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null });
                 persistSavedChannels();
             }
             for (let i = 0; i < slots.length; i++) {
@@ -693,6 +716,49 @@
         function clearAll() {
             slots.forEach((s, i) => clearSlot(i));
             localStorage.removeItem('activeLayout');
+        }
+
+        // ---------- Automaattinen täyttö ----------
+
+        function runAutoFill() {
+            const cooldownMs = 5 * 60 * 1000;
+            const now = Date.now();
+
+            slots.forEach((s, i) => {
+                if (s.style.display === 'none') return;
+
+                const isEmpty = !s.dataset.name;
+                let isOfflineTwitch = false;
+                if (!isEmpty && s.dataset.plat === 'twitch') {
+                    const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === 'twitch');
+                    isOfflineTwitch = !!(entry && entry.isLive === false);
+                }
+
+                if (!isEmpty && !isOfflineTwitch) return;
+
+                const excludeNames = slots.map(sl => sl.dataset.name).filter(Boolean);
+                const candidates = savedChannels.filter(c =>
+                    c.plat === 'twitch' &&
+                    c.isLive === true &&
+                    !excludeNames.includes(c.name) &&
+                    (now - (c.lastClosedLiveAt || 0)) > cooldownMs
+                );
+                candidates.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
+                const candidate = candidates[0];
+
+                if (candidate) {
+                    loadStreamIntoSlot(i, candidate.name, candidate.plat);
+                    saveLayout();
+                }
+            });
+        }
+
+        function onAutoFillToggleChange() {
+            autoFillEnabled = document.getElementById('autoFillToggle').checked;
+            localStorage.setItem('autoFillEnabled', autoFillEnabled);
+            if (autoFillEnabled) {
+                refreshTwitchLiveStatus(true);
+            }
         }
 
         // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan päivitys ----------
@@ -840,7 +906,7 @@
             const chunks = [];
             for (let i = 0; i < twitchLogins.length; i += 100) chunks.push(twitchLogins.slice(i, i + 100));
 
-            const liveSet = new Set();
+            const liveInfo = new Map();
             try {
                 for (const chunk of chunks) {
                     const params = chunk.map(n => `user_login=${encodeURIComponent(n)}`).join('&');
@@ -849,13 +915,18 @@
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();
-                    data.data.forEach(s => liveSet.add(s.user_login.toLowerCase()));
+                    data.data.forEach(s => liveInfo.set(s.user_login.toLowerCase(), s.viewer_count));
                 }
                 savedChannels.forEach(c => {
-                    if (c.plat === 'twitch') c.isLive = liveSet.has(c.name.toLowerCase());
+                    if (c.plat === 'twitch') {
+                        const viewers = liveInfo.get(c.name.toLowerCase());
+                        c.isLive = viewers !== undefined;
+                        c.viewerCount = viewers !== undefined ? viewers : null;
+                    }
                 });
                 persistSavedChannels();
                 renderSavedList();
+                if (autoFillEnabled) runAutoFill();
             } catch (err) {
                 if (!silent) {
                     alert('Live-tilan haku epäonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
@@ -898,11 +969,71 @@
             updateAutoRefreshUI();
         }, 1000);
 
+        // ---------- Asetusten vienti / tuonti ----------
+
+        function exportSettings() {
+            const data = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                myChannels: JSON.parse(localStorage.getItem('myChannels') || '[]'),
+                twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
+                categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]'),
+                gridMode: localStorage.getItem('gridMode'),
+                activeLayout: JSON.parse(localStorage.getItem('activeLayout') || 'null'),
+                autoRefreshEnabled: localStorage.getItem('autoRefreshEnabled'),
+                autoFillEnabled: localStorage.getItem('autoFillEnabled'),
+                boxHeight_active: localStorage.getItem('boxHeight_active'),
+                boxHeight_twitch: localStorage.getItem('boxHeight_twitch'),
+                boxHeight_kick: localStorage.getItem('boxHeight_kick')
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'multistream-theater-asetukset.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function triggerImportFile() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function importSettings(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.myChannels !== undefined) localStorage.setItem('myChannels', JSON.stringify(data.myChannels));
+                    if (data.twitchCreds) localStorage.setItem('twitchCreds', JSON.stringify(data.twitchCreds));
+                    if (data.categoryHistory !== undefined) localStorage.setItem('categoryHistory', JSON.stringify(data.categoryHistory));
+                    if (data.gridMode) localStorage.setItem('gridMode', data.gridMode);
+                    if (data.activeLayout) localStorage.setItem('activeLayout', JSON.stringify(data.activeLayout));
+                    if (data.autoRefreshEnabled !== undefined && data.autoRefreshEnabled !== null) localStorage.setItem('autoRefreshEnabled', data.autoRefreshEnabled);
+                    if (data.autoFillEnabled !== undefined && data.autoFillEnabled !== null) localStorage.setItem('autoFillEnabled', data.autoFillEnabled);
+                    if (data.boxHeight_active) localStorage.setItem('boxHeight_active', data.boxHeight_active);
+                    if (data.boxHeight_twitch) localStorage.setItem('boxHeight_twitch', data.boxHeight_twitch);
+                    if (data.boxHeight_kick) localStorage.setItem('boxHeight_kick', data.boxHeight_kick);
+                    alert('Asetukset tuotu onnistuneesti. Sivu ladataan uudelleen.');
+                    location.reload();
+                } catch (err) {
+                    alert('Tiedoston lukeminen epäonnistui: virheellinen JSON-tiedosto.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
         // ---------- Käynnistys ----------
 
         document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
         document.getElementById('twitchToken').value = twitchCreds.token || '';
         document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
+        document.getElementById('autoFillToggle').checked = autoFillEnabled;
         renderCategoryHistory();
         updateAddButtonColor();
         updateAutoRefreshUI();
