@@ -13,7 +13,6 @@
         .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: margin-right 0.3s; }
         .right-sidebar.collapsed { margin-right: -320px; margin-left: 0; }
 
-        /* Koko palkki EI vierity - vain yksittäiset laatikot sisällä vierittävät omaa sisältöään */
         .sidebar-content { display: flex; flex-direction: column; gap: 8px; padding: 15px; height: 100%; overflow: hidden; box-sizing: border-box; }
 
         .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
@@ -21,11 +20,8 @@
 
         .list-header { font-size: 12px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; flex-shrink: 0; }
 
-        /* Yksittäisen listan oma vierityslaatikko */
         .list-scroll-box { overflow-y: auto; overflow-x: hidden; }
-        /* Käsin venytettävä, koko muistissa (activeContent / twitchListWrap / kickListWrap) */
         .list-scroll-box.resizable { min-height: 150px; height: 150px; flex-shrink: 0; resize: vertical; border: 1px solid #26262b; border-radius: 4px; }
-        /* Oikean palkin hakutulokset: venyy jäljelle jäävään tilaan, ei käsin venytettävä */
         .list-scroll-box.grow { flex: 1 1 auto; min-height: 50px; }
 
         .btn-group { display: flex; gap: 5px; flex-shrink: 0; }
@@ -35,21 +31,36 @@
         .btn-mute { background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
         .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
         input, select, button { background: #1f1f23; color: #fff; border: 1px solid #3a3a3d; padding: 8px; border-radius: 4px; font-family: inherit; }
-        .btn-add { background: #53fc18; color: #000; font-weight: bold; cursor: pointer; }
+        .btn-add { color: #000; font-weight: bold; cursor: pointer; border: none; }
+        /* Alustakohtaiset väriteemat: Twitch = violetti, Kick = vihreä (Kickin oma brändivihreä) */
+        .btn-twitch { background: #9146ff; color: #fff; }
+        .btn-kick { background: #53fc18; color: #000; }
         .hint-link { font-size: 11px; color: #888; text-decoration: none; }
-        .hint-link:hover { color: #53fc18; }
+        .hint-link:hover { color: #9146ff; }
         .hint-text { font-size: 11px; color: #666; line-height: 1.4; flex-shrink: 0; }
 
         .history-list { display: flex; flex-wrap: wrap; gap: 4px; }
-        .history-chip { background: #26262b; border: 1px solid #3a3a3d; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 12px; cursor: pointer; }
-        .history-chip:hover { background: #333; color: #fff; }
+        .history-chip { display: flex; align-items: center; background: #26262b; border: 1px solid #3a3a3d; border-radius: 12px; overflow: hidden; }
+        .history-chip-label { background: transparent; border: none; color: #ccc; font-size: 11px; padding: 3px 6px 3px 8px; cursor: pointer; border-radius: 0; }
+        .history-chip-label:hover { color: #fff; }
+        .history-chip-remove { background: transparent; border: none; color: #888; font-size: 13px; line-height: 1; padding: 3px 7px 3px 3px; cursor: pointer; border-radius: 0; }
+        .history-chip-remove:hover { color: #eb0400; }
+
+        .auto-refresh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+        .auto-refresh-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #ccc; cursor: pointer; }
+        .auto-refresh-toggle input { display: none; }
+        .toggle-slider { width: 32px; height: 17px; background: #3a3a3d; border-radius: 999px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+        .toggle-slider::before { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
+        .auto-refresh-toggle input:checked + .toggle-slider { background: #9146ff; }
+        .auto-refresh-toggle input:checked + .toggle-slider::before { transform: translateX(15px); }
+        #autoRefreshCountdown { white-space: nowrap; }
 
         .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
         .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
         .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; cursor: pointer; }
 
-        #thumbPreview { position: fixed; right: 330px; width: 320px; height: 180px; border: 2px solid #53fc18; border-radius: 6px; overflow: hidden; z-index: 999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; background: #000; }
+        #thumbPreview { position: fixed; right: 330px; width: 320px; height: 180px; border: 2px solid #9146ff; border-radius: 6px; overflow: hidden; z-index: 999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; background: #000; }
         #thumbPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
         .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
@@ -94,12 +105,12 @@
                     <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
                 </div>
                 <div class="manual-add-box">
-                    <select id="platform">
+                    <select id="platform" onchange="updateAddButtonColor()">
                         <option value="kick">Kick</option>
                         <option value="twitch">Twitch</option>
                     </select>
                     <input type="text" id="channelInput" placeholder="Nimi..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
-                    <button class="btn-add" onclick="processNewChannel()">Lisää</button>
+                    <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()">Lisää</button>
                 </div>
 
                 <div class="list-header" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></div>
@@ -122,20 +133,28 @@
                 <div class="manual-add-box">
                     <input type="password" id="twitchClientId" placeholder="Client-ID">
                     <input type="password" id="twitchToken" placeholder="Access Token">
-                    <button class="btn-add" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                    <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
                     <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
                 </div>
 
                 <div class="list-header" style="cursor:default;">
                     <span>Live-tilat (tallennetut, Twitch)</span>
-                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
+                    <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
-                <div class="hint-text">Päivittyy automaattisesti 2 min välein tunnusten ollessa asetettuna. Harmaa pallo = tila ei tiedossa.</div>
+                <div class="auto-refresh-row">
+                    <label class="auto-refresh-toggle">
+                        <input type="checkbox" id="autoRefreshToggle" checked onchange="onAutoRefreshToggleChange()">
+                        <span class="toggle-slider"></span>
+                        <span>Automaattinen päivitys</span>
+                    </label>
+                    <span id="autoRefreshCountdown" class="hint-text"></span>
+                </div>
+                <div class="hint-text">Päivittää automaattisesti myös auki olevan kategoriahaun tulokset. Harmaa pallo = tila ei tiedossa.</div>
 
                 <div class="list-header" style="cursor:default;">Selaa kategoriaa (Twitch)</div>
                 <div class="manual-add-box">
                     <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
-                    <button class="btn-add" onclick="searchTwitchCategory()">Hae livenä olevat</button>
+                    <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
                     <div class="history-list" id="categoryHistoryList"></div>
                 </div>
                 <div class="hint-text">Kickin kategoriahaku vaatisi täyden OAuth-kirjautumisen palvelimen kautta, joten se ei valitettavasti onnistu ilman backendiä pelkässä HTML-tiedostossa.</div>
@@ -176,9 +195,31 @@
         } catch (e) { categoryHistory = []; }
 
         let slots = [];
+        let lastCategoryQuery = '';
+
+        let autoRefreshEnabled = true;
+        try {
+            const storedAR = localStorage.getItem('autoRefreshEnabled');
+            autoRefreshEnabled = storedAR === null ? true : storedAR === 'true';
+        } catch (e) { autoRefreshEnabled = true; }
+        let autoRefreshSecondsLeft = 120;
 
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
+        }
+
+        // ---------- Lisää-napin väri alustan mukaan ----------
+
+        function updateAddButtonColor() {
+            const plat = document.getElementById('platform').value;
+            const btn = document.getElementById('addChannelBtn');
+            if (plat === 'twitch') {
+                btn.classList.remove('btn-kick');
+                btn.classList.add('btn-twitch');
+            } else {
+                btn.classList.remove('btn-twitch');
+                btn.classList.add('btn-kick');
+            }
         }
 
         // ---------- Laatikoiden koon muistaminen (resize: vertical + ResizeObserver) ----------
@@ -192,7 +233,6 @@
             const observer = new ResizeObserver(entries => {
                 for (const entry of entries) {
                     const h = Math.round(entry.contentRect.height);
-                    // Ohitetaan piilotetun (display:none) laatikon 0-korkeus ettei se ylikirjoita tallennettua kokoa
                     if (h >= 100) {
                         localStorage.setItem(storageKey, h);
                     }
@@ -201,7 +241,7 @@
             observer.observe(el);
         }
 
-        // ---------- Kokoontaitettavat osiot (yleinen apufunktio) ----------
+        // ---------- Kokoontaitettavat osiot ----------
 
         function toggleCollapsible(contentId, iconId) {
             const content = document.getElementById(contentId);
@@ -212,7 +252,7 @@
 
         function toggleActiveList() { toggleCollapsible('activeContent', 'toggleIcon'); }
 
-        // ---------- Isompi esikatselukuva hiiren päällä (hakutulokset) ----------
+        // ---------- Isompi esikatselukuva hiiren päällä ----------
 
         function showThumbPreview(e, imgUrl) {
             const preview = document.getElementById('thumbPreview');
@@ -322,7 +362,7 @@
             document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        // ---------- Listojen renderöinti (XSS-turvallinen: textContent/DOM, ei innerHTML-interpolointia) ----------
+        // ---------- Listojen renderöinti ----------
 
         function updateLists() {
             const activeList = document.getElementById('activeList');
@@ -422,7 +462,7 @@
             for (let i in layout) loadStreamIntoSlot(i, layout[i].name, layout[i].plat);
         }
 
-        // ---------- Striimin lataus / siirto / vaihto (DOM-elementtien siirto, EI uudelleenlatausta) ----------
+        // ---------- Striimin lataus / siirto / vaihto ----------
 
         function loadStreamIntoSlot(idx, name, plat) {
             idx = parseInt(idx);
@@ -678,28 +718,54 @@
             const box = document.getElementById('categoryHistoryList');
             box.innerHTML = '';
             categoryHistory.forEach(term => {
-                const chip = document.createElement('button');
-                chip.type = 'button';
+                const chip = document.createElement('span');
                 chip.className = 'history-chip';
-                chip.textContent = term;
-                chip.addEventListener('click', () => {
+
+                const label = document.createElement('button');
+                label.type = 'button';
+                label.className = 'history-chip-label';
+                label.textContent = term;
+                label.addEventListener('click', () => {
                     document.getElementById('categoryInput').value = term;
                 });
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'history-chip-remove';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Poista hakuhistoriasta';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    categoryHistory = categoryHistory.filter(t => t !== term);
+                    localStorage.setItem('categoryHistory', JSON.stringify(categoryHistory));
+                    renderCategoryHistory();
+                });
+                chip.appendChild(removeBtn);
+
                 box.appendChild(chip);
             });
         }
 
-        async function searchTwitchCategory() {
+        async function searchTwitchCategory(auto = false) {
             const resultsBox = document.getElementById('categoryResults');
-            resultsBox.innerHTML = '';
+
             if (!twitchCreds.clientId || !twitchCreds.token) {
-                resultsBox.textContent = 'Lisää ensin Twitchin Client-ID ja Access Token yläpuolelle.';
+                if (!auto) resultsBox.textContent = 'Lisää ensin Twitchin Client-ID ja Access Token yläpuolelle.';
                 return;
             }
-            const query = document.getElementById('categoryInput').value.trim();
-            if (!query) return;
-            addToCategoryHistory(query);
-            resultsBox.textContent = 'Haetaan...';
+
+            let query;
+            if (auto) {
+                query = lastCategoryQuery;
+                if (!query) return;
+            } else {
+                query = document.getElementById('categoryInput').value.trim();
+                if (!query) return;
+                addToCategoryHistory(query);
+                lastCategoryQuery = query;
+                resultsBox.textContent = 'Haetaan...';
+            }
 
             try {
                 const gameRes = await fetch(`https://api.twitch.tv/helix/games?name=${encodeURIComponent(query)}`, {
@@ -708,7 +774,7 @@
                 if (!gameRes.ok) throw new Error('Kategoriahaku epäonnistui (HTTP ' + gameRes.status + ')');
                 const gameData = await gameRes.json();
                 if (!gameData.data || gameData.data.length === 0) {
-                    resultsBox.textContent = 'Kategoriaa ei löytynyt (huom: Twitch vaatii tarkan nimen, esim. "Just Chatting").';
+                    if (!auto) resultsBox.textContent = 'Kategoriaa ei löytynyt (huom: Twitch vaatii tarkan nimen, esim. "Just Chatting").';
                     return;
                 }
                 const gameId = gameData.data[0].id;
@@ -758,7 +824,8 @@
                     resultsBox.appendChild(item);
                 });
             } catch (err) {
-                resultsBox.textContent = 'Virhe: ' + err.message + ' (tarkista Client-ID/Token)';
+                if (!auto) resultsBox.textContent = 'Virhe: ' + err.message + ' (tarkista Client-ID/Token)';
+                else console.warn('Automaattinen kategoriapäivitys epäonnistui:', err.message);
             }
         }
 
@@ -798,19 +865,52 @@
             }
         }
 
+        // ---------- Automaattinen päivitys: kytkin + sekuntilaskuri ----------
+
+        function updateAutoRefreshUI() {
+            const countdownEl = document.getElementById('autoRefreshCountdown');
+            if (countdownEl) {
+                countdownEl.textContent = autoRefreshEnabled ? (autoRefreshSecondsLeft + ' s') : 'Pois päältä';
+            }
+        }
+
+        function onAutoRefreshToggleChange() {
+            autoRefreshEnabled = document.getElementById('autoRefreshToggle').checked;
+            localStorage.setItem('autoRefreshEnabled', autoRefreshEnabled);
+            if (autoRefreshEnabled) autoRefreshSecondsLeft = 120;
+            updateAutoRefreshUI();
+        }
+
+        async function runAutoRefreshCycle() {
+            if (twitchCreds.clientId && twitchCreds.token) {
+                await refreshTwitchLiveStatus(true);
+                if (lastCategoryQuery) await searchTwitchCategory(true);
+            }
+        }
+
+        setInterval(() => {
+            if (!autoRefreshEnabled) return;
+            autoRefreshSecondsLeft--;
+            if (autoRefreshSecondsLeft <= 0) {
+                runAutoRefreshCycle();
+                autoRefreshSecondsLeft = 120;
+            }
+            updateAutoRefreshUI();
+        }, 1000);
+
         // ---------- Käynnistys ----------
 
         document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
         document.getElementById('twitchToken').value = twitchCreds.token || '';
+        document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
         renderCategoryHistory();
+        updateAddButtonColor();
+        updateAutoRefreshUI();
         initSlots();
         setupResizablePersistence('activeContent', 'boxHeight_active');
         setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
         setupResizablePersistence('kickListWrap', 'boxHeight_kick');
         if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
-        setInterval(() => {
-            if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
-        }, 2 * 60 * 1000);
     </script>
 </body>
 </html>
