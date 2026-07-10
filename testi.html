@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>MultiStream Theater Ultimate</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e0e10'/%3E%3Crect x='4' y='4' width='11' height='11' rx='2' fill='%239146ff'/%3E%3Crect x='17' y='4' width='11' height='11' rx='2' fill='%2353fc18'/%3E%3Crect x='4' y='17' width='11' height='11' rx='2' fill='%2353fc18'/%3E%3Crect x='17' y='17' width='11' height='11' rx='2' fill='%239146ff'/%3E%3C/svg%3E">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #0e0e10; color: #efeff1; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
@@ -76,6 +77,7 @@
         .status-dot.live { background: #53fc18; box-shadow: 0 0 4px #53fc18; }
         .status-dot.offline { background: #eb0400; }
         .status-dot.unknown { background: #444; border: 1px solid #666; }
+        .status-dot.category-mismatch { background: #f3c611; box-shadow: 0 0 4px #f3c611; }
 
         .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
         .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -151,7 +153,7 @@
 
                 <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat (Twitch) <span id="liveStatusIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~5 minuutiksi ettei se palaa heti takaisin. Toimii vain Twitch-kanaville ja vaatii Automaattisen päivityksen olevan päällä.">?</button>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~5 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli löytyy kategoriahaun historiasta. Ei sulje jo pyörivää striimiä vaikka pelaaja vaihtaisi kategoriaa kesken kaiken - tarkistus tehdään vain uutta paikkaa valittaessa.">?</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
                 <div id="liveStatusBody">
@@ -168,6 +170,13 @@
                             <input type="checkbox" id="autoFillToggle" onchange="onAutoFillToggleChange()">
                             <span class="toggle-slider"></span>
                             <span>Täytä paikat automaattisesti</span>
+                        </label>
+                    </div>
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="categoryFilterToggle" onchange="onCategoryFilterToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Suosi vain haettuja kategorioita</span>
                         </label>
                     </div>
                 </div>
@@ -218,7 +227,8 @@
             plat: c.plat,
             lastClosedLiveAt: c.lastClosedLiveAt || 0,
             isLive: (typeof c.isLive === 'boolean') ? c.isLive : null,
-            viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null
+            viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null,
+            gameName: (typeof c.gameName === 'string') ? c.gameName : null
         }));
 
         let twitchCreds = { clientId: '', token: '' };
@@ -232,6 +242,20 @@
             const rawHist = JSON.parse(localStorage.getItem('categoryHistory'));
             if (Array.isArray(rawHist)) categoryHistory = rawHist;
         } catch (e) { categoryHistory = []; }
+
+        // visualOrder[visuaalinenPaikka] = fyysinen slot-indeksi joka renderöityy siihen paikkaan.
+        // Fyysiset .stream-slot -elementit EIVÄT KOSKAAN liiku DOM-puussa - vain tämä järjestys muuttuu,
+        // ja järjestys toteutetaan CSS order -ominaisuudella. Näin iframeä ei ikinä siirretä/ladata uudelleen raahauksessa.
+        let visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        try {
+            const storedOrder = JSON.parse(localStorage.getItem('visualOrder'));
+            if (Array.isArray(storedOrder) && storedOrder.length === 9) {
+                const asSet = new Set(storedOrder);
+                if (asSet.size === 9 && [...asSet].every(v => Number.isInteger(v) && v >= 0 && v <= 8)) {
+                    visualOrder = storedOrder;
+                }
+            }
+        } catch (e) { /* pidetään oletusjärjestys */ }
 
         let slots = [];
         let lastCategoryQuery = '';
@@ -248,8 +272,36 @@
             autoFillEnabled = localStorage.getItem('autoFillEnabled') === 'true';
         } catch (e) { autoFillEnabled = false; }
 
+        let categoryFilterEnabled = false;
+        try {
+            categoryFilterEnabled = localStorage.getItem('categoryFilterEnabled') === 'true';
+        } catch (e) { categoryFilterEnabled = false; }
+
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
+        }
+
+        // ---------- Visuaalinen järjestys (order-pohjainen, ei DOM-siirtoja) ----------
+
+        function applyVisualOrder() {
+            visualOrder.forEach((physicalIdx, visualPos) => {
+                slots[physicalIdx].style.order = visualPos;
+            });
+        }
+
+        function getVisualPos(physicalIdx) {
+            return visualOrder.indexOf(physicalIdx);
+        }
+
+        function updateSlotNumbering() {
+            slots.forEach((s, physicalIdx) => {
+                if (!s.dataset.name) return;
+                const labelText = s.querySelector('.stream-label-text');
+                if (labelText) {
+                    const vp = getVisualPos(physicalIdx);
+                    labelText.textContent = `${vp + 1}. ${s.dataset.name}`;
+                }
+            });
         }
 
         // ---------- Alustaikonit (ei virallisia logoja - värilliset kirjainmerkit) ----------
@@ -262,13 +314,14 @@
             return badge;
         }
 
-        function createStreamLabel(idx, name, plat) {
+        function createStreamLabel(physicalIdx, name, plat) {
             const label = document.createElement('div');
             label.className = 'stream-label';
             label.appendChild(createPlatformBadge(plat));
             const textSpan = document.createElement('span');
             textSpan.className = 'stream-label-text';
-            textSpan.textContent = `${idx + 1}. ${name}`;
+            const vp = getVisualPos(physicalIdx);
+            textSpan.textContent = `${vp + 1}. ${name}`;
             label.appendChild(textSpan);
             return label;
         }
@@ -384,7 +437,7 @@
         function toggleSavedFromPlayer(name, plat, btnEl) {
             const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
             if (idx === -1) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
                 if (btnEl) btnEl.classList.add('favorited');
             } else {
                 savedChannels.splice(idx, 1);
@@ -413,9 +466,11 @@
                 container.appendChild(slot);
                 slots.push(slot);
             }
+            applyVisualOrder();
             updateGridDisplay();
             renderLists();
             restoreStreams();
+            updateSlotNumbering();
         }
 
         function toggleSidebar() {
@@ -435,11 +490,12 @@
         function updateLists() {
             const activeList = document.getElementById('activeList');
             activeList.innerHTML = "";
-            slots.forEach((s, i) => {
-                if (s.dataset.name) {
+            visualOrder.forEach((physicalIdx, visualPos) => {
+                const s = slots[physicalIdx];
+                if (s && s.dataset.name) {
                     const item = document.createElement('div');
                     item.className = 'list-item';
-                    item.textContent = `${i + 1}. ${s.dataset.name}`;
+                    item.textContent = `${visualPos + 1}. ${s.dataset.name}`;
                     activeList.appendChild(item);
                 }
             });
@@ -464,6 +520,24 @@
             });
         }
 
+        function getDotStatus(c) {
+            if (c.plat === 'kick') {
+                return { cls: 'unknown', title: 'Kick: live-tila ei tiedossa ilman OAuth-kirjautumista' };
+            }
+            if (c.isLive === null) {
+                return { cls: 'unknown', title: "Paina 'Päivitä' hakeaksesi live-tilan Twitchistä" };
+            }
+            if (c.isLive === false) {
+                return { cls: 'offline', title: 'Ei livenä' };
+            }
+            if (categoryHistory.length > 0 && c.gameName) {
+                const matches = categoryHistory.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                if (matches) return { cls: 'live', title: `Livenä – kategoria täsmää (${c.gameName})` };
+                return { cls: 'category-mismatch', title: `Livenä, mutta eri kategoriassa: ${c.gameName}` };
+            }
+            return { cls: 'live', title: c.gameName ? `Livenä – ${c.gameName}` : 'Livenä' };
+        }
+
         function renderSavedList() {
             const activeNames = slots.map(s => s.dataset.name);
             const visible = savedChannels.filter(c => !activeNames.includes(c.name));
@@ -486,11 +560,9 @@
                 left.appendChild(createPlatformBadge(c.plat));
 
                 const dot = document.createElement('span');
-                const statusClass = c.isLive === true ? 'live' : (c.isLive === false ? 'offline' : 'unknown');
-                dot.className = 'status-dot ' + statusClass;
-                dot.title = c.plat === 'kick'
-                    ? 'Kick: live-tila ei tiedossa ilman OAuth-kirjautumista'
-                    : (c.isLive === null ? "Paina 'Päivitä' hakeaksesi live-tilan Twitchistä" : (c.isLive ? 'Livenä' : 'Ei livenä'));
+                const status = getDotStatus(c);
+                dot.className = 'status-dot ' + status.cls;
+                dot.title = status.title;
                 left.appendChild(dot);
 
                 const nameSpan = document.createElement('span');
@@ -524,6 +596,7 @@
                 if (s.dataset.name) layout[i] = { name: s.dataset.name, plat: s.dataset.plat };
             });
             localStorage.setItem('activeLayout', JSON.stringify(layout));
+            localStorage.setItem('visualOrder', JSON.stringify(visualOrder));
             updateLists();
         }
 
@@ -534,7 +607,7 @@
             for (let i in layout) loadStreamIntoSlot(i, layout[i].name, layout[i].plat);
         }
 
-        // ---------- Striimin lataus / siirto / vaihto ----------
+        // ---------- Striimin lataus ----------
 
         function loadStreamIntoSlot(idx, name, plat) {
             idx = parseInt(idx);
@@ -554,67 +627,15 @@
 
             const iframe = document.createElement('iframe');
             iframe.src = url;
+            // Huom: picture-in-picture EI ole enää sallittu -> selain ei näytä automaattista PiP-kuvaketta hoveroidessa
             iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
-            iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+            iframe.setAttribute('allow', 'autoplay; encrypted-media');
             iframe.setAttribute('referrerpolicy', 'no-referrer');
             wrapper.appendChild(iframe);
 
             slots[idx].appendChild(wrapper);
             slots[idx].classList.add('active');
             updateLists();
-        }
-
-        function moveStream(fromIdx, toIdx) {
-            const fromSlot = slots[fromIdx];
-            const toSlot = slots[toIdx];
-            const wrapper = fromSlot.querySelector('.stream-wrapper');
-            if (!wrapper) return;
-
-            const labelText = wrapper.querySelector('.stream-label-text');
-            const name = fromSlot.dataset.name;
-            const plat = fromSlot.dataset.plat;
-
-            toSlot.innerHTML = '';
-            toSlot.appendChild(buildActiveControls(toIdx, name, plat));
-            toSlot.appendChild(wrapper);
-            toSlot.dataset.name = name;
-            toSlot.dataset.plat = plat;
-            if (labelText) labelText.textContent = `${toIdx + 1}. ${name}`;
-            toSlot.classList.add('active');
-
-            fromSlot.innerHTML = '';
-            fromSlot.appendChild(buildEmptyControls(fromIdx));
-            const freeBtn = document.createElement('button');
-            freeBtn.textContent = 'Vapaa';
-            fromSlot.appendChild(freeBtn);
-            fromSlot.classList.remove('active');
-            delete fromSlot.dataset.name;
-            delete fromSlot.dataset.plat;
-        }
-
-        function swapSlots(aIdx, bIdx) {
-            const aSlot = slots[aIdx];
-            const bSlot = slots[bIdx];
-            const aWrapper = aSlot.querySelector('.stream-wrapper');
-            const bWrapper = bSlot.querySelector('.stream-wrapper');
-            const aName = aSlot.dataset.name, aPlat = aSlot.dataset.plat;
-            const bName = bSlot.dataset.name, bPlat = bSlot.dataset.plat;
-            const aLabelText = aWrapper.querySelector('.stream-label-text');
-            const bLabelText = bWrapper.querySelector('.stream-label-text');
-
-            aSlot.innerHTML = '';
-            aSlot.appendChild(buildActiveControls(aIdx, bName, bPlat));
-            aSlot.appendChild(bWrapper);
-            aSlot.dataset.name = bName; aSlot.dataset.plat = bPlat;
-            if (bLabelText) bLabelText.textContent = `${aIdx + 1}. ${bName}`;
-            aSlot.classList.add('active');
-
-            bSlot.innerHTML = '';
-            bSlot.appendChild(buildActiveControls(bIdx, aName, aPlat));
-            bSlot.appendChild(aWrapper);
-            bSlot.dataset.name = aName; bSlot.dataset.plat = aPlat;
-            if (aLabelText) aLabelText.textContent = `${bIdx + 1}. ${aName}`;
-            bSlot.classList.add('active');
         }
 
         // ---------- Ruudukkokoko ----------
@@ -625,7 +646,10 @@
             container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
             document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
             document.getElementById('btn-' + gridMode).classList.add('active');
-            slots.forEach((s, i) => s.style.display = i < gridMode * gridMode ? 'flex' : 'none');
+            slots.forEach((s, physicalIdx) => {
+                const vp = getVisualPos(physicalIdx);
+                s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
+            });
         }
 
         function changeGridMode(val) {
@@ -637,11 +661,12 @@
             updateGridDisplay();
 
             if (newVisibleCount > oldVisibleCount) {
-                for (let i = oldVisibleCount; i < newVisibleCount; i++) {
-                    if (slots[i].dataset.name) {
-                        loadStreamIntoSlot(i, slots[i].dataset.name, slots[i].dataset.plat);
+                slots.forEach((s, physicalIdx) => {
+                    const vp = getVisualPos(physicalIdx);
+                    if (vp >= oldVisibleCount && vp < newVisibleCount && s.dataset.name) {
+                        loadStreamIntoSlot(physicalIdx, s.dataset.name, s.dataset.plat);
                     }
-                }
+                });
             }
         }
 
@@ -652,7 +677,7 @@
             });
         }
 
-        // ---------- Raahaus ----------
+        // ---------- Raahaus: VAIN visuaalisen järjestyksen vaihto, ei koskaan DOM-siirtoa ----------
 
         function drag(e, i) {
             e.dataTransfer.setData("src", i);
@@ -674,16 +699,16 @@
 
             const srcHasStream = !!slots[srcIdx].dataset.name;
             const targetHasStream = !!slots[targetIdx].dataset.name;
-
             if (!srcHasStream && !targetHasStream) return;
 
-            if (srcHasStream && targetHasStream) {
-                swapSlots(srcIdx, targetIdx);
-            } else if (srcHasStream) {
-                moveStream(srcIdx, targetIdx);
-            } else {
-                moveStream(targetIdx, srcIdx);
-            }
+            const srcVisualPos = getVisualPos(srcIdx);
+            const targetVisualPos = getVisualPos(targetIdx);
+            visualOrder[srcVisualPos] = targetIdx;
+            visualOrder[targetVisualPos] = srcIdx;
+
+            applyVisualOrder();
+            updateGridDisplay();
+            updateSlotNumbering();
             saveLayout();
         }
 
@@ -695,7 +720,7 @@
             const plat = document.getElementById('platform').value;
             if (!name) return;
             if (!savedChannels.find(c => c.name === name)) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
                 persistSavedChannels();
             }
             for (let i = 0; i < slots.length; i++) {
@@ -723,10 +748,11 @@
                 if (!slots[i].classList.contains('active')) {
                     loadStreamIntoSlot(i, name, plat);
                     saveLayout();
-                    return;
+                    return true;
                 }
             }
             alert('Kaikki 9 paikkaa ovat käytössä. Vapauta jokin paikka ensin.');
+            return false;
         }
 
         function deleteCh(name, e) {
@@ -762,6 +788,10 @@
         function clearAll() {
             slots.forEach((s, i) => clearSlot(i));
             localStorage.removeItem('activeLayout');
+            visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            applyVisualOrder();
+            updateGridDisplay();
+            saveLayout();
         }
 
         // ---------- Automaattinen täyttö ----------
@@ -783,12 +813,17 @@
                 if (!isEmpty && !isOfflineTwitch) return;
 
                 const excludeNames = slots.map(sl => sl.dataset.name).filter(Boolean);
-                const candidates = savedChannels.filter(c =>
-                    c.plat === 'twitch' &&
-                    c.isLive === true &&
-                    !excludeNames.includes(c.name) &&
-                    (now - (c.lastClosedLiveAt || 0)) > cooldownMs
-                );
+                const candidates = savedChannels.filter(c => {
+                    if (c.plat !== 'twitch') return false;
+                    if (c.isLive !== true) return false;
+                    if (excludeNames.includes(c.name)) return false;
+                    if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
+                    if (categoryFilterEnabled) {
+                        const matches = c.gameName && categoryHistory.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                        if (!matches) return false;
+                    }
+                    return true;
+                });
                 candidates.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
                 const candidate = candidates[0];
 
@@ -805,6 +840,11 @@
             if (autoFillEnabled) {
                 refreshTwitchLiveStatus(true);
             }
+        }
+
+        function onCategoryFilterToggleChange() {
+            categoryFilterEnabled = document.getElementById('categoryFilterToggle').checked;
+            localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
         }
 
         // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan päivitys ----------
@@ -891,20 +931,30 @@
                 }
                 const gameId = gameData.data[0].id;
 
-                const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${gameId}&first=20`, {
+                const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${gameId}&first=30`, {
                     headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
                 });
                 if (!streamsRes.ok) throw new Error('Striimihaku epäonnistui (HTTP ' + streamsRes.status + ')');
                 const streamsData = await streamsRes.json();
 
                 resultsBox.innerHTML = '';
-                if (!streamsData.data || streamsData.data.length === 0) {
-                    resultsBox.textContent = 'Ei livenä olevia striimejä juuri nyt.';
+
+                const activeLogins = slots.map(s => s.dataset.name).filter(Boolean).map(n => n.toLowerCase());
+                const filtered = (streamsData.data || []).filter(s =>
+                    s.viewer_count >= 5 && !activeLogins.includes(s.user_login.toLowerCase())
+                );
+
+                if (filtered.length === 0) {
+                    resultsBox.textContent = 'Ei uusia (≥5 katsojaa, ei jo playerissa) livenä olevia striimejä juuri nyt.';
                     return;
                 }
 
-                streamsData.data.forEach(s => {
+                filtered.forEach(s => {
                     const login = s.user_login.toLowerCase();
+
+                    // Esiladataan iso esikatselukuva heti, jotta hover-vaihto muihin kuviin näkyy välittömästi
+                    const preloadImg = new Image();
+                    preloadImg.src = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180');
 
                     // <a>-elementti: tavallinen klikkaus lataa playeriin, keski-/ctrl-klikkaus
                     // avaa Twitch-kanavan uuteen välilehteen selaimen omalla natiivilla toiminnolla
@@ -916,7 +966,8 @@
                     item.addEventListener('click', (e) => {
                         if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                             e.preventDefault();
-                            loadFromCategorySearch(login, 'twitch');
+                            const loaded = loadFromCategorySearch(login, 'twitch');
+                            if (loaded) item.remove();
                         }
                     });
 
@@ -975,13 +1026,14 @@
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();
-                    data.data.forEach(s => liveInfo.set(s.user_login.toLowerCase(), s.viewer_count));
+                    data.data.forEach(s => liveInfo.set(s.user_login.toLowerCase(), { viewerCount: s.viewer_count, gameName: s.game_name || '' }));
                 }
                 savedChannels.forEach(c => {
                     if (c.plat === 'twitch') {
-                        const viewers = liveInfo.get(c.name.toLowerCase());
-                        c.isLive = viewers !== undefined;
-                        c.viewerCount = viewers !== undefined ? viewers : null;
+                        const info = liveInfo.get(c.name.toLowerCase());
+                        c.isLive = info !== undefined;
+                        c.viewerCount = info !== undefined ? info.viewerCount : null;
+                        c.gameName = info !== undefined ? info.gameName : null;
                     }
                 });
                 persistSavedChannels();
@@ -1033,15 +1085,17 @@
 
         function exportSettings() {
             const data = {
-                version: 1,
+                version: 2,
                 exportedAt: new Date().toISOString(),
                 myChannels: JSON.parse(localStorage.getItem('myChannels') || '[]'),
                 twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
                 categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]'),
                 gridMode: localStorage.getItem('gridMode'),
                 activeLayout: JSON.parse(localStorage.getItem('activeLayout') || 'null'),
+                visualOrder: JSON.parse(localStorage.getItem('visualOrder') || 'null'),
                 autoRefreshEnabled: localStorage.getItem('autoRefreshEnabled'),
                 autoFillEnabled: localStorage.getItem('autoFillEnabled'),
+                categoryFilterEnabled: localStorage.getItem('categoryFilterEnabled'),
                 boxHeight_active: localStorage.getItem('boxHeight_active'),
                 boxHeight_twitch: localStorage.getItem('boxHeight_twitch'),
                 boxHeight_kick: localStorage.getItem('boxHeight_kick')
@@ -1073,8 +1127,10 @@
                     if (data.categoryHistory !== undefined) localStorage.setItem('categoryHistory', JSON.stringify(data.categoryHistory));
                     if (data.gridMode) localStorage.setItem('gridMode', data.gridMode);
                     if (data.activeLayout) localStorage.setItem('activeLayout', JSON.stringify(data.activeLayout));
+                    if (data.visualOrder) localStorage.setItem('visualOrder', JSON.stringify(data.visualOrder));
                     if (data.autoRefreshEnabled !== undefined && data.autoRefreshEnabled !== null) localStorage.setItem('autoRefreshEnabled', data.autoRefreshEnabled);
                     if (data.autoFillEnabled !== undefined && data.autoFillEnabled !== null) localStorage.setItem('autoFillEnabled', data.autoFillEnabled);
+                    if (data.categoryFilterEnabled !== undefined && data.categoryFilterEnabled !== null) localStorage.setItem('categoryFilterEnabled', data.categoryFilterEnabled);
                     if (data.boxHeight_active) localStorage.setItem('boxHeight_active', data.boxHeight_active);
                     if (data.boxHeight_twitch) localStorage.setItem('boxHeight_twitch', data.boxHeight_twitch);
                     if (data.boxHeight_kick) localStorage.setItem('boxHeight_kick', data.boxHeight_kick);
@@ -1094,6 +1150,7 @@
         document.getElementById('twitchToken').value = twitchCreds.token || '';
         document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
         document.getElementById('autoFillToggle').checked = autoFillEnabled;
+        document.getElementById('categoryFilterToggle').checked = categoryFilterEnabled;
         renderCategoryHistory();
         updateAddButtonColor();
         updateAutoRefreshUI();
