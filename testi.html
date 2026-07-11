@@ -59,17 +59,31 @@
         .auto-refresh-toggle input:checked + .toggle-slider::before { transform: translateX(15px); }
         #autoRefreshCountdown { white-space: nowrap; }
 
+        .slider-row { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+        .slider-row-label { display: flex; justify-content: space-between; font-size: 11px; color: #ccc; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: #3a3a3d; border-radius: 2px; padding: 0; border: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #9146ff; cursor: pointer; }
+        input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #9146ff; cursor: pointer; border: none; }
+
         .platform-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 9px; font-weight: bold; flex-shrink: 0; line-height: 1; }
         .platform-badge.platform-twitch { background: #9146ff; color: #fff; }
         .platform-badge.platform-kick { background: #53fc18; color: #000; }
 
         .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
-        .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+        .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
         .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
         .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; cursor: pointer; }
+        .block-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
 
         #thumbPreview { position: fixed; right: 330px; width: 320px; height: 180px; border: 2px solid #9146ff; border-radius: 6px; overflow: hidden; z-index: 999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; background: #000; }
         #thumbPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
+        .modal-box { background: #18181b; border: 1px solid #26262b; border-radius: 8px; width: 360px; max-height: 70vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #26262b; font-weight: bold; font-size: 14px; }
+        .modal-close-btn { background: transparent; border: none; color: #999; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
+        .modal-close-btn:hover { color: #fff; }
+        .modal-body { padding: 12px 16px; overflow-y: auto; }
 
         .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
 
@@ -100,6 +114,16 @@
 <body>
     <div id="thumbPreview"><img src="" alt=""></div>
 
+    <div id="blacklistModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>Mustalla listalla olevat kanavat</span>
+                <button class="modal-close-btn" onclick="closeBlacklistModal()">×</button>
+            </div>
+            <div id="blacklistList" class="modal-body"></div>
+        </div>
+    </div>
+
     <div class="main-layout">
         <div class="sidebar" id="sidebar">
             <button class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()">◀</button>
@@ -111,6 +135,7 @@
                 </div>
                 <div style="display: flex; gap: 5px; flex-shrink: 0;">
                     <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
+                    <button class="btn-sm" style="flex: 1; background:#3a3a3d;" onclick="openBlacklistModal()">Blacklist</button>
                     <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
                 </div>
                 <div class="manual-add-box">
@@ -118,7 +143,7 @@
                         <option value="kick">Kick</option>
                         <option value="twitch">Twitch</option>
                     </select>
-                    <input type="text" id="channelInput" placeholder="Nimi..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
+                    <input type="text" id="channelInput" placeholder="Nimi..." autocomplete="off" onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
                     <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()">Lisää</button>
                 </div>
 
@@ -144,8 +169,8 @@
                 </div>
                 <div id="twitchCredsBody">
                     <div class="manual-add-box">
-                        <input type="password" id="twitchClientId" placeholder="Client-ID">
-                        <input type="password" id="twitchToken" placeholder="Access Token">
+                        <input type="password" id="twitchClientId" placeholder="Client-ID" autocomplete="off">
+                        <input type="password" id="twitchToken" placeholder="Access Token" autocomplete="off">
                         <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
                         <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
                     </div>
@@ -179,6 +204,19 @@
                             <span>Suosi vain haettuja kategorioita</span>
                         </label>
                     </div>
+
+                    <div class="slider-row">
+                        <div class="slider-row-label">
+                            <span>Max. lähetysaika (kategoriahaku)</span>
+                            <span id="uptimeFilterValue">30 h</span>
+                        </div>
+                        <input type="range" id="uptimeFilterSlider" min="6" max="30" value="30" oninput="onUptimeFilterChange()">
+                    </div>
+
+                    <div class="manual-add-box" style="padding:0; background:none; border:none;">
+                        <button class="btn-sm" onclick="promptBannedWord()">Suodata otsikosta</button>
+                        <div class="history-list" id="bannedWordsList"></div>
+                    </div>
                 </div>
 
                 <div class="list-header">
@@ -200,7 +238,7 @@
                 </div>
                 <div id="categorySearchBody">
                     <div class="manual-add-box">
-                        <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
+                        <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." autocomplete="off" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
                         <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
                         <div class="history-list" id="categoryHistoryList"></div>
                     </div>
@@ -243,6 +281,24 @@
             if (Array.isArray(rawHist)) categoryHistory = rawHist;
         } catch (e) { categoryHistory = []; }
 
+        let blacklist = [];
+        try {
+            const rawBl = JSON.parse(localStorage.getItem('blacklist'));
+            if (Array.isArray(rawBl)) blacklist = rawBl;
+        } catch (e) { blacklist = []; }
+
+        let bannedTitleWords = [];
+        try {
+            const rawBw = JSON.parse(localStorage.getItem('bannedTitleWords'));
+            if (Array.isArray(rawBw)) bannedTitleWords = rawBw;
+        } catch (e) { bannedTitleWords = []; }
+
+        let uptimeFilterHours = 30;
+        try {
+            const storedUp = parseInt(localStorage.getItem('uptimeFilterHours'));
+            if (storedUp >= 6 && storedUp <= 30) uptimeFilterHours = storedUp;
+        } catch (e) { uptimeFilterHours = 30; }
+
         // visualOrder[visuaalinenPaikka] = fyysinen slot-indeksi joka renderöityy siihen paikkaan.
         // Fyysiset .stream-slot -elementit EIVÄT KOSKAAN liiku DOM-puussa - vain tämä järjestys muuttuu,
         // ja järjestys toteutetaan CSS order -ominaisuudella. Näin iframeä ei ikinä siirretä/ladata uudelleen raahauksessa.
@@ -255,7 +311,7 @@
                     visualOrder = storedOrder;
                 }
             }
-        } catch (e) { /* pidetään oletusjärjestys */ }
+        } catch (e) { /* pidetaan oletusjarjestys */ }
 
         let slots = [];
         let lastCategoryQuery = '';
@@ -272,16 +328,18 @@
             autoFillEnabled = localStorage.getItem('autoFillEnabled') === 'true';
         } catch (e) { autoFillEnabled = false; }
 
-        let categoryFilterEnabled = false;
+        // Oletuksena PAALLA: kun kategorioita on haettu, kayttaja yleensa haluaa taytön kunnioittavan niita.
+        let categoryFilterEnabled = true;
         try {
-            categoryFilterEnabled = localStorage.getItem('categoryFilterEnabled') === 'true';
-        } catch (e) { categoryFilterEnabled = false; }
+            const storedCF = localStorage.getItem('categoryFilterEnabled');
+            categoryFilterEnabled = storedCF === null ? true : storedCF === 'true';
+        } catch (e) { categoryFilterEnabled = true; }
 
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
         }
 
-        // ---------- Visuaalinen järjestys (order-pohjainen, ei DOM-siirtoja) ----------
+        // ---------- Visuaalinen jarjestys (order-pohjainen, ei DOM-siirtoja) ----------
 
         function applyVisualOrder() {
             visualOrder.forEach((physicalIdx, visualPos) => {
@@ -304,7 +362,7 @@
             });
         }
 
-        // ---------- Alustaikonit (ei virallisia logoja - värilliset kirjainmerkit) ----------
+        // ---------- Alustaikonit (ei virallisia logoja - varilliset kirjainmerkit) ----------
 
         function createPlatformBadge(plat) {
             const badge = document.createElement('span');
@@ -326,7 +384,7 @@
             return label;
         }
 
-        // ---------- Lisää-napin väri alustan mukaan ----------
+        // ---------- Lisaa-napin vari alustan mukaan ----------
 
         function updateAddButtonColor() {
             const plat = document.getElementById('platform').value;
@@ -370,7 +428,7 @@
 
         function toggleActiveList() { toggleCollapsible('activeContent', 'toggleIcon'); }
 
-        // ---------- Isompi esikatselukuva hiiren päällä ----------
+        // ---------- Isompi esikatselukuva hiiren paalla ----------
 
         function showThumbPreview(e, imgUrl) {
             const preview = document.getElementById('thumbPreview');
@@ -386,6 +444,124 @@
             document.getElementById('thumbPreview').style.display = 'none';
         }
 
+        // ---------- Blacklist ----------
+
+        function persistBlacklist() {
+            localStorage.setItem('blacklist', JSON.stringify(blacklist));
+        }
+
+        function blockChannel(login) {
+            login = login.toLowerCase();
+            if (!blacklist.includes(login)) {
+                blacklist.push(login);
+                persistBlacklist();
+            }
+        }
+
+        function unblockChannel(login) {
+            blacklist = blacklist.filter(b => b !== login);
+            persistBlacklist();
+            renderBlacklistModal();
+        }
+
+        function openBlacklistModal() {
+            renderBlacklistModal();
+            document.getElementById('blacklistModal').style.display = 'flex';
+        }
+
+        function closeBlacklistModal() {
+            document.getElementById('blacklistModal').style.display = 'none';
+        }
+
+        function renderBlacklistModal() {
+            const box = document.getElementById('blacklistList');
+            box.innerHTML = '';
+            if (blacklist.length === 0) {
+                box.textContent = 'Musta lista on tyhja.';
+                box.style.color = '#666';
+                box.style.fontSize = '13px';
+                return;
+            }
+            box.style.color = '';
+            box.style.fontSize = '';
+            blacklist.forEach(login => {
+                const row = document.createElement('div');
+                row.className = 'saved-channel';
+                row.style.cursor = 'default';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name-text';
+                nameSpan.textContent = login;
+                row.appendChild(nameSpan);
+
+                const btn = document.createElement('button');
+                btn.className = 'close-btn';
+                btn.textContent = 'X';
+                btn.title = 'Poista mustalta listalta';
+                btn.addEventListener('click', () => unblockChannel(login));
+                row.appendChild(btn);
+
+                box.appendChild(row);
+            });
+        }
+
+        // ---------- Kielletyt sanat otsikossa ----------
+
+        function persistBannedWords() {
+            localStorage.setItem('bannedTitleWords', JSON.stringify(bannedTitleWords));
+        }
+
+        function promptBannedWord() {
+            const word = prompt('Kirjoita teksti jonka esiintyessa striimin otsikossa se piilotetaan hakutuloksista (ei erota isoja/pienia kirjaimia). Muista kayttaa tarkkaa muotoa, esim. valilyonnit, jotta esim. " RR " ei osu sanaan "soRRy".');
+            if (!word) return;
+            if (!bannedTitleWords.includes(word)) {
+                bannedTitleWords.push(word);
+                persistBannedWords();
+                renderBannedWords();
+            }
+        }
+
+        function renderBannedWords() {
+            const box = document.getElementById('bannedWordsList');
+            box.innerHTML = '';
+            bannedTitleWords.forEach(word => {
+                const chip = document.createElement('span');
+                chip.className = 'history-chip';
+
+                const label = document.createElement('span');
+                label.className = 'history-chip-label';
+                label.style.cursor = 'default';
+                label.textContent = word;
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'history-chip-remove';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Poista suodatuslistalta';
+                removeBtn.addEventListener('click', () => {
+                    bannedTitleWords = bannedTitleWords.filter(w => w !== word);
+                    persistBannedWords();
+                    renderBannedWords();
+                });
+                chip.appendChild(removeBtn);
+
+                box.appendChild(chip);
+            });
+        }
+
+        // ---------- Lahetysaikasuodatin ----------
+
+        function onUptimeFilterChange() {
+            uptimeFilterHours = parseInt(document.getElementById('uptimeFilterSlider').value);
+            localStorage.setItem('uptimeFilterHours', uptimeFilterHours);
+            updateUptimeFilterLabel();
+        }
+
+        function updateUptimeFilterLabel() {
+            document.getElementById('uptimeFilterValue').textContent = uptimeFilterHours + ' h';
+        }
+
         // ---------- Slottien ohjauspainikkeet ----------
 
         function buildEmptyControls(idx) {
@@ -395,7 +571,7 @@
             handle.className = 'drag-handle';
             handle.draggable = true;
             handle.textContent = '☰';
-            handle.title = 'Siirrä';
+            handle.title = 'Siirra';
             handle.addEventListener('dragstart', (e) => drag(e, idx));
             handle.addEventListener('dragend', dragEnd);
             controls.appendChild(handle);
@@ -410,7 +586,7 @@
             handle.className = 'drag-handle';
             handle.draggable = true;
             handle.textContent = '☰';
-            handle.title = 'Siirrä striimi';
+            handle.title = 'Siirra striimi';
             handle.addEventListener('dragstart', (e) => drag(e, idx));
             handle.addEventListener('dragend', dragEnd);
             controls.appendChild(handle);
@@ -418,7 +594,7 @@
             const heart = document.createElement('button');
             heart.className = 'heart-btn';
             heart.textContent = '♥';
-            heart.title = 'Lisää/poista tallennetuista kanavista';
+            heart.title = 'Lisaa/poista tallennetuista kanavista';
             const isSaved = savedChannels.some(c => c.name === name && c.plat === plat);
             heart.classList.toggle('favorited', isSaved);
             heart.addEventListener('click', () => toggleSavedFromPlayer(name, plat, heart));
@@ -485,7 +661,7 @@
             document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        // ---------- Listojen renderöinti ----------
+        // ---------- Listojen renderointi ----------
 
         function updateLists() {
             const activeList = document.getElementById('activeList');
@@ -525,17 +701,17 @@
                 return { cls: 'unknown', title: 'Kick: live-tila ei tiedossa ilman OAuth-kirjautumista' };
             }
             if (c.isLive === null) {
-                return { cls: 'unknown', title: "Paina 'Päivitä' hakeaksesi live-tilan Twitchistä" };
+                return { cls: 'unknown', title: "Paina 'Paivita' hakeaksesi live-tilan Twitchista" };
             }
             if (c.isLive === false) {
-                return { cls: 'offline', title: 'Ei livenä' };
+                return { cls: 'offline', title: 'Ei livena' };
             }
             if (categoryHistory.length > 0 && c.gameName) {
                 const matches = categoryHistory.some(h => h.toLowerCase() === c.gameName.toLowerCase());
-                if (matches) return { cls: 'live', title: `Livenä – kategoria täsmää (${c.gameName})` };
-                return { cls: 'category-mismatch', title: `Livenä, mutta eri kategoriassa: ${c.gameName}` };
+                if (matches) return { cls: 'live', title: `Livena - kategoria tasmaa (${c.gameName})` };
+                return { cls: 'category-mismatch', title: `Livena, mutta eri kategoriassa: ${c.gameName}` };
             }
-            return { cls: 'live', title: c.gameName ? `Livenä – ${c.gameName}` : 'Livenä' };
+            return { cls: 'live', title: c.gameName ? `Livena - ${c.gameName}` : 'Livena' };
         }
 
         function renderSavedList() {
@@ -627,7 +803,6 @@
 
             const iframe = document.createElement('iframe');
             iframe.src = url;
-            // Huom: picture-in-picture EI ole enää sallittu -> selain ei näytä automaattista PiP-kuvaketta hoveroidessa
             iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
             iframe.setAttribute('allow', 'autoplay; encrypted-media');
             iframe.setAttribute('referrerpolicy', 'no-referrer');
@@ -677,7 +852,7 @@
             });
         }
 
-        // ---------- Raahaus: VAIN visuaalisen järjestyksen vaihto, ei koskaan DOM-siirtoa ----------
+        // ---------- Raahaus: VAIN visuaalisen jarjestyksen vaihto, ei koskaan DOM-siirtoa ----------
 
         function drag(e, i) {
             e.dataTransfer.setData("src", i);
@@ -712,7 +887,7 @@
             saveLayout();
         }
 
-        // ---------- Kanavien lisäys / poisto ----------
+        // ---------- Kanavien lisays / poisto ----------
 
         function processNewChannel() {
             const input = document.getElementById('channelInput');
@@ -751,13 +926,13 @@
                     return true;
                 }
             }
-            alert('Kaikki 9 paikkaa ovat käytössä. Vapauta jokin paikka ensin.');
+            alert('Kaikki 9 paikkaa ovat kaytossa. Vapauta jokin paikka ensin.');
             return false;
         }
 
         function deleteCh(name, e) {
             e.stopPropagation();
-            if (confirm("Oletko varma, että haluat poistaa kanavan " + name + " tallennetuista?")) {
+            if (confirm("Oletko varma, etta haluat poistaa kanavan " + name + " tallennetuista?")) {
                 savedChannels = savedChannels.filter(c => c.name !== name);
                 persistSavedChannels();
                 renderLists();
@@ -794,7 +969,7 @@
             saveLayout();
         }
 
-        // ---------- Automaattinen täyttö ----------
+        // ---------- Automaattinen taytto ----------
 
         function runAutoFill() {
             const cooldownMs = 5 * 60 * 1000;
@@ -817,6 +992,7 @@
                     if (c.plat !== 'twitch') return false;
                     if (c.isLive !== true) return false;
                     if (excludeNames.includes(c.name)) return false;
+                    if (blacklist.includes(c.name.toLowerCase())) return false;
                     if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
                     if (categoryFilterEnabled) {
                         const matches = c.gameName && categoryHistory.some(h => h.toLowerCase() === c.gameName.toLowerCase());
@@ -847,7 +1023,7 @@
             localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
         }
 
-        // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan päivitys ----------
+        // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan paivitys ----------
 
         function saveTwitchCreds() {
             twitchCreds.clientId = document.getElementById('twitchClientId').value.trim();
@@ -903,7 +1079,7 @@
             const resultsBox = document.getElementById('categoryResults');
 
             if (!twitchCreds.clientId || !twitchCreds.token) {
-                if (!auto) resultsBox.textContent = 'Lisää ensin Twitchin Client-ID ja Access Token yläpuolelle.';
+                if (!auto) resultsBox.textContent = 'Lisaa ensin Twitchin Client-ID ja Access Token ylapuolelle.';
                 return;
             }
 
@@ -923,10 +1099,10 @@
                 const gameRes = await fetch(`https://api.twitch.tv/helix/games?name=${encodeURIComponent(query)}`, {
                     headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
                 });
-                if (!gameRes.ok) throw new Error('Kategoriahaku epäonnistui (HTTP ' + gameRes.status + ')');
+                if (!gameRes.ok) throw new Error('Kategoriahaku epaonnistui (HTTP ' + gameRes.status + ')');
                 const gameData = await gameRes.json();
                 if (!gameData.data || gameData.data.length === 0) {
-                    if (!auto) resultsBox.textContent = 'Kategoriaa ei löytynyt (huom: Twitch vaatii tarkan nimen, esim. "Just Chatting").';
+                    if (!auto) resultsBox.textContent = 'Kategoriaa ei loytynyt (huom: Twitch vaatii tarkan nimen, esim. "Just Chatting").';
                     return;
                 }
                 const gameId = gameData.data[0].id;
@@ -934,48 +1110,60 @@
                 const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${gameId}&first=30`, {
                     headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
                 });
-                if (!streamsRes.ok) throw new Error('Striimihaku epäonnistui (HTTP ' + streamsRes.status + ')');
+                if (!streamsRes.ok) throw new Error('Striimihaku epaonnistui (HTTP ' + streamsRes.status + ')');
                 const streamsData = await streamsRes.json();
 
                 resultsBox.innerHTML = '';
 
                 const activeLogins = slots.map(s => s.dataset.name).filter(Boolean).map(n => n.toLowerCase());
-                const filtered = (streamsData.data || []).filter(s =>
-                    s.viewer_count >= 5 && !activeLogins.includes(s.user_login.toLowerCase())
-                );
+                const nowMs = Date.now();
+
+                const filtered = (streamsData.data || []).filter(s => {
+                    if (s.viewer_count < 5) return false;
+                    const login = s.user_login.toLowerCase();
+                    if (activeLogins.includes(login)) return false;
+                    if (blacklist.includes(login)) return false;
+                    const startedMs = new Date(s.started_at).getTime();
+                    const hoursLive = (nowMs - startedMs) / (1000 * 60 * 60);
+                    if (hoursLive > uptimeFilterHours) return false;
+                    if (bannedTitleWords.some(w => s.title && s.title.toLowerCase().includes(w.toLowerCase()))) return false;
+                    return true;
+                });
 
                 if (filtered.length === 0) {
-                    resultsBox.textContent = 'Ei uusia (≥5 katsojaa, ei jo playerissa) livenä olevia striimejä juuri nyt.';
+                    resultsBox.textContent = 'Ei suodattimet lapaisevia livena olevia striimeja juuri nyt.';
                     return;
                 }
 
                 filtered.forEach(s => {
                     const login = s.user_login.toLowerCase();
 
-                    // Esiladataan iso esikatselukuva heti, jotta hover-vaihto muihin kuviin näkyy välittömästi
-                    const preloadImg = new Image();
-                    preloadImg.src = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180');
+                    const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45');
+                    const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180');
 
-                    // <a>-elementti: tavallinen klikkaus lataa playeriin, keski-/ctrl-klikkaus
-                    // avaa Twitch-kanavan uuteen välilehteen selaimen omalla natiivilla toiminnolla
-                    const item = document.createElement('a');
+                    // Esiladataan iso esikatselukuva heti, jotta hover-vaihto muihin kuviin nakyy valittomasti
+                    const preloadImg = new Image();
+                    preloadImg.src = bigThumbUrl;
+
+                    const item = document.createElement('div');
                     item.className = 'saved-channel';
-                    item.href = `https://www.twitch.tv/${login}`;
-                    item.target = '_blank';
-                    item.rel = 'noopener noreferrer';
-                    item.addEventListener('click', (e) => {
+                    item.style.cursor = 'default';
+
+                    // <a>-elementti kattaa vain kuvan/nimen: tavallinen klikkaus lataa playeriin,
+                    // keski-/ctrl-klikkaus avaa Twitch-kanavan uuteen valilehteen selaimen natiivilla toiminnolla.
+                    const linkArea = document.createElement('a');
+                    linkArea.className = 'left-group';
+                    linkArea.href = `https://www.twitch.tv/${login}`;
+                    linkArea.target = '_blank';
+                    linkArea.rel = 'noopener noreferrer';
+                    linkArea.style.cursor = 'pointer';
+                    linkArea.addEventListener('click', (e) => {
                         if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                             e.preventDefault();
                             const loaded = loadFromCategorySearch(login, 'twitch');
                             if (loaded) item.remove();
                         }
                     });
-
-                    const left = document.createElement('span');
-                    left.className = 'left-group';
-
-                    const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45');
-                    const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180');
 
                     const thumb = document.createElement('img');
                     thumb.className = 'stream-thumb';
@@ -984,31 +1172,42 @@
                     thumb.loading = 'lazy';
                     thumb.addEventListener('mouseenter', (e) => showThumbPreview(e, bigThumbUrl));
                     thumb.addEventListener('mouseleave', hideThumbPreview);
-                    left.appendChild(thumb);
+                    linkArea.appendChild(thumb);
 
-                    left.appendChild(createPlatformBadge('twitch'));
+                    linkArea.appendChild(createPlatformBadge('twitch'));
 
                     const dot = document.createElement('span');
                     dot.className = 'status-dot live';
-                    left.appendChild(dot);
+                    linkArea.appendChild(dot);
 
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'name-text';
                     nameSpan.textContent = `${s.user_name} (${s.viewer_count.toLocaleString('fi-FI')})`;
-                    left.appendChild(nameSpan);
+                    linkArea.appendChild(nameSpan);
 
-                    item.appendChild(left);
+                    item.appendChild(linkArea);
+
+                    const blockBtn = document.createElement('button');
+                    blockBtn.className = 'block-btn';
+                    blockBtn.textContent = 'Block';
+                    blockBtn.title = 'Esta tama kanava nakymasta hakutuloksissa';
+                    blockBtn.addEventListener('click', () => {
+                        blockChannel(login);
+                        item.remove();
+                    });
+                    item.appendChild(blockBtn);
+
                     resultsBox.appendChild(item);
                 });
             } catch (err) {
                 if (!auto) resultsBox.textContent = 'Virhe: ' + err.message + ' (tarkista Client-ID/Token)';
-                else console.warn('Automaattinen kategoriapäivitys epäonnistui:', err.message);
+                else console.warn('Automaattinen kategoriapaivitys epaonnistui:', err.message);
             }
         }
 
         async function refreshTwitchLiveStatus(silent = false) {
             if (!twitchCreds.clientId || !twitchCreds.token) {
-                if (!silent) alert('Lisää ensin Twitchin Client-ID ja Access Token yllä.');
+                if (!silent) alert('Lisaa ensin Twitchin Client-ID ja Access Token ylla.');
                 return;
             }
             const twitchLogins = savedChannels.filter(c => c.plat === 'twitch').map(c => c.name);
@@ -1041,19 +1240,19 @@
                 if (autoFillEnabled) runAutoFill();
             } catch (err) {
                 if (!silent) {
-                    alert('Live-tilan haku epäonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
+                    alert('Live-tilan haku epaonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
                 } else {
-                    console.warn('Automaattinen live-tilan päivitys epäonnistui:', err.message);
+                    console.warn('Automaattinen live-tilan paivitys epaonnistui:', err.message);
                 }
             }
         }
 
-        // ---------- Automaattinen päivitys: kytkin + sekuntilaskuri ----------
+        // ---------- Automaattinen paivitys: kytkin + sekuntilaskuri ----------
 
         function updateAutoRefreshUI() {
             const countdownEl = document.getElementById('autoRefreshCountdown');
             if (countdownEl) {
-                countdownEl.textContent = autoRefreshEnabled ? (autoRefreshSecondsLeft + ' s') : 'Pois päältä';
+                countdownEl.textContent = autoRefreshEnabled ? (autoRefreshSecondsLeft + ' s') : 'Pois paalta';
             }
         }
 
@@ -1085,11 +1284,14 @@
 
         function exportSettings() {
             const data = {
-                version: 2,
+                version: 3,
                 exportedAt: new Date().toISOString(),
                 myChannels: JSON.parse(localStorage.getItem('myChannels') || '[]'),
                 twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
                 categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]'),
+                blacklist: JSON.parse(localStorage.getItem('blacklist') || '[]'),
+                bannedTitleWords: JSON.parse(localStorage.getItem('bannedTitleWords') || '[]'),
+                uptimeFilterHours: localStorage.getItem('uptimeFilterHours'),
                 gridMode: localStorage.getItem('gridMode'),
                 activeLayout: JSON.parse(localStorage.getItem('activeLayout') || 'null'),
                 visualOrder: JSON.parse(localStorage.getItem('visualOrder') || 'null'),
@@ -1125,6 +1327,9 @@
                     if (data.myChannels !== undefined) localStorage.setItem('myChannels', JSON.stringify(data.myChannels));
                     if (data.twitchCreds) localStorage.setItem('twitchCreds', JSON.stringify(data.twitchCreds));
                     if (data.categoryHistory !== undefined) localStorage.setItem('categoryHistory', JSON.stringify(data.categoryHistory));
+                    if (data.blacklist !== undefined) localStorage.setItem('blacklist', JSON.stringify(data.blacklist));
+                    if (data.bannedTitleWords !== undefined) localStorage.setItem('bannedTitleWords', JSON.stringify(data.bannedTitleWords));
+                    if (data.uptimeFilterHours) localStorage.setItem('uptimeFilterHours', data.uptimeFilterHours);
                     if (data.gridMode) localStorage.setItem('gridMode', data.gridMode);
                     if (data.activeLayout) localStorage.setItem('activeLayout', JSON.stringify(data.activeLayout));
                     if (data.visualOrder) localStorage.setItem('visualOrder', JSON.stringify(data.visualOrder));
@@ -1137,27 +1342,33 @@
                     alert('Asetukset tuotu onnistuneesti. Sivu ladataan uudelleen.');
                     location.reload();
                 } catch (err) {
-                    alert('Tiedoston lukeminen epäonnistui: virheellinen JSON-tiedosto.');
+                    alert('Tiedoston lukeminen epaonnistui: virheellinen JSON-tiedosto.');
                 }
             };
             reader.readAsText(file);
             event.target.value = '';
         }
 
-        // ---------- Käynnistys ----------
+        // ---------- Kaynnistys ----------
 
         document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
         document.getElementById('twitchToken').value = twitchCreds.token || '';
         document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
         document.getElementById('autoFillToggle').checked = autoFillEnabled;
         document.getElementById('categoryFilterToggle').checked = categoryFilterEnabled;
+        document.getElementById('uptimeFilterSlider').value = uptimeFilterHours;
+        updateUptimeFilterLabel();
         renderCategoryHistory();
+        renderBannedWords();
         updateAddButtonColor();
         updateAutoRefreshUI();
         initSlots();
         setupResizablePersistence('activeContent', 'boxHeight_active');
         setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
         setupResizablePersistence('kickListWrap', 'boxHeight_kick');
+        document.getElementById('blacklistModal').addEventListener('click', (e) => {
+            if (e.target.id === 'blacklistModal') closeBlacklistModal();
+        });
         if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
     </script>
 </body>
