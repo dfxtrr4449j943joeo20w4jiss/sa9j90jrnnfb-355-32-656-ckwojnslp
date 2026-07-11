@@ -143,8 +143,10 @@
                         <option value="kick">Kick</option>
                         <option value="twitch">Twitch</option>
                     </select>
-                    <input type="text" id="channelInput" placeholder="Nimi..." autocomplete="off" onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
-                    <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()">Lisää</button>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="channelInput" placeholder="Nimi..." autocomplete="off" style="flex:1; min-width:0;" onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
+                        <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()" style="flex:none; padding:8px 14px;">Lisää</button>
+                    </div>
                 </div>
 
                 <div class="list-header"><span class="collapse-trigger" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></span></div>
