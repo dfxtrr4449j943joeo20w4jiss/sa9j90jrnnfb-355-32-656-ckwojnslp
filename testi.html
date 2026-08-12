@@ -32,6 +32,7 @@
         .btn-group { display: flex; gap: 5px; flex-shrink: 0; }
         .btn-sm { flex: 1; padding: 8px; background: #26262b; color: white; border: 1px solid #3a3a3d; cursor: pointer; border-radius: 4px; }
         .btn-sm.active { background: #53fc18; color: #000; font-weight: bold; }
+        .btn-sm.sort-active { background: #9146ff; color: #fff; font-weight: bold; }
         .btn-danger { background: #eb0400; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
         .btn-mute { background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
         .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
@@ -83,10 +84,12 @@
         #thumbPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
-        .modal-box { background: #18181b; border: 1px solid #26262b; border-radius: 8px; width: 360px; max-height: 70vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        .modal-box { background: #18181b; border: 1px solid #26262b; border-radius: 8px; width: 380px; max-height: 75vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #26262b; font-weight: bold; font-size: 14px; }
         .modal-close-btn { background: transparent; border: none; color: #999; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
         .modal-close-btn:hover { color: #fff; }
+        .modal-toolbar { padding: 10px 16px 0; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .modal-sort-row { display: flex; gap: 6px; }
         .modal-body { padding: 12px 16px; overflow-y: auto; }
 
         .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
@@ -123,6 +126,14 @@
             <div class="modal-header">
                 <span>Mustalla listalla olevat kanavat (<span id="blacklistCount">0</span>)</span>
                 <button class="modal-close-btn" onclick="closeBlacklistModal()">×</button>
+            </div>
+            <div class="modal-toolbar">
+                <input type="text" id="blacklistSearchInput" placeholder="Suodata nimellä..." autocomplete="off" oninput="renderBlacklistModal()">
+                <div class="modal-sort-row">
+                    <button class="btn-sm" id="sortBtnAlpha" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('alpha')">A-Ö</button>
+                    <button class="btn-sm" id="sortBtnNewest" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('newest')">Uusin</button>
+                    <button class="btn-sm" id="sortBtnOldest" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('oldest')">Vanhin</button>
+                </div>
             </div>
             <div id="blacklistList" class="modal-body"></div>
         </div>
@@ -184,8 +195,8 @@
                 </div>
 
                 <div class="list-header">
-                    <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat (Twitch) <span id="liveStatusIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla Twitch-kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa (pallo kategorian nimen edessä). Jos yhtään kategoriaa ei ole merkitty vihreäksi, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos striimaaja vaihtaa kategoriaan joka ei ole vihreänä, ja korvaa sen sopivalla ehdokkaalla.">?</button>
+                    <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat <span id="liveStatusIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset.&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla (eniten katsojia ensin). Twitchille tämä toimii aina, Kickille kokeellisesti jos sen live-tila saadaan selvitettyä (ei taattu, ei virallista API:a). Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa (pallo kategorian nimen edessä, oletuksena harmaa uusille hauille). Jos yhtään kategoriaa ei ole merkitty vihreäksi, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos striimaaja vaihtaa kategoriaan joka ei ole vihreänä, ja korvaa sen sopivalla ehdokkaalla.">?</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
                 <div id="liveStatusBody">
@@ -251,12 +262,12 @@
 
                 <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch) <span id="categorySearchIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.">?</button>
                 </div>
                 <div id="categorySearchBody">
                     <div class="manual-add-box">
                         <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." autocomplete="off" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
                         <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
-                        <div class="hint-text">Pallo nimen edessä: vihreä = huomioidaan automaattitäytössä, harmaa = vain pikahaku. Klikkaa palloa vaihtaaksesi.</div>
                         <div class="history-list" id="categoryHistoryList"></div>
                     </div>
                 </div>
@@ -292,8 +303,9 @@
             if (rawCreds) twitchCreds = rawCreds;
         } catch (e) { twitchCreds = { clientId: '', token: '' }; }
 
-        // categoryHistory: [{name: 'VRChat', enabled: true}, ...]
-        // Vanha formaatti (pelkkia merkkijonoja) migroidaan automaattisesti enabled:true -tilaan.
+        // categoryHistory: [{name: 'VRChat', enabled: false}, ...]
+        // Vanha formaatti (pelkkia merkkijonoja) migroidaan automaattisesti enabled:true -tilaan
+        // (koska ne olivat aiemmin aina "kaytossa"); UUDET haut lisataan jatkossa enabled:false.
         let categoryHistory = [];
         try {
             const rawHist = JSON.parse(localStorage.getItem('categoryHistory'));
@@ -305,11 +317,18 @@
             }
         } catch (e) { categoryHistory = []; }
 
+        // blacklist: [{login: 'xxx', addedAt: timestamp}, ...] - 24h vanhat poistetaan automaattisesti
         let blacklist = [];
         try {
             const rawBl = JSON.parse(localStorage.getItem('blacklist'));
-            if (Array.isArray(rawBl)) blacklist = rawBl;
+            if (Array.isArray(rawBl)) {
+                blacklist = rawBl.map(b => {
+                    if (typeof b === 'string') return { login: b, addedAt: Date.now() };
+                    return { login: b.login, addedAt: (typeof b.addedAt === 'number') ? b.addedAt : Date.now() };
+                });
+            }
         } catch (e) { blacklist = []; }
+        let blacklistSortMode = 'alpha';
 
         let bannedTitleWords = [];
         try {
@@ -542,7 +561,7 @@
             document.getElementById('thumbPreview').style.display = 'none';
         }
 
-        // ---------- Blacklist ----------
+        // ---------- Blacklist (haku + jarjestys + 24h vanheneminen) ----------
 
         function persistBlacklist() {
             localStorage.setItem('blacklist', JSON.stringify(blacklist));
@@ -550,19 +569,32 @@
 
         function blockChannel(login) {
             login = login.toLowerCase();
-            if (!blacklist.includes(login)) {
-                blacklist.push(login);
+            if (!blacklist.some(b => b.login === login)) {
+                blacklist.push({ login, addedAt: Date.now() });
                 persistBlacklist();
             }
         }
 
         function unblockChannel(login) {
-            blacklist = blacklist.filter(b => b !== login);
+            blacklist = blacklist.filter(b => b.login !== login);
             persistBlacklist();
             renderBlacklistModal();
         }
 
+        function pruneExpiredBlacklist() {
+            const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+            const before = blacklist.length;
+            blacklist = blacklist.filter(b => b.addedAt > cutoff);
+            if (blacklist.length !== before) persistBlacklist();
+        }
+
+        function setBlacklistSort(mode) {
+            blacklistSortMode = mode;
+            renderBlacklistModal();
+        }
+
         function openBlacklistModal() {
+            pruneExpiredBlacklist();
             renderBlacklistModal();
             document.getElementById('blacklistModal').style.display = 'flex';
         }
@@ -576,6 +608,13 @@
             const countEl = document.getElementById('blacklistCount');
             if (countEl) countEl.textContent = blacklist.length;
 
+            ['sortBtnAlpha', 'sortBtnNewest', 'sortBtnOldest'].forEach(id => document.getElementById(id).classList.remove('sort-active'));
+            const activeBtnId = blacklistSortMode === 'alpha' ? 'sortBtnAlpha' : (blacklistSortMode === 'newest' ? 'sortBtnNewest' : 'sortBtnOldest');
+            document.getElementById(activeBtnId).classList.add('sort-active');
+
+            const searchInput = document.getElementById('blacklistSearchInput');
+            const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
             box.innerHTML = '';
             if (blacklist.length === 0) {
                 box.textContent = 'Musta lista on tyhja.';
@@ -583,25 +622,41 @@
                 box.style.fontSize = '13px';
                 return;
             }
+
+            let list = blacklist.filter(b => !query || b.login.includes(query));
+            if (blacklistSortMode === 'alpha') {
+                list = [...list].sort((a, b) => a.login.localeCompare(b.login));
+            } else if (blacklistSortMode === 'newest') {
+                list = [...list].sort((a, b) => b.addedAt - a.addedAt);
+            } else {
+                list = [...list].sort((a, b) => a.addedAt - b.addedAt);
+            }
+
+            if (list.length === 0) {
+                box.textContent = 'Ei hakua vastaavia nimia.';
+                box.style.color = '#666';
+                box.style.fontSize = '13px';
+                return;
+            }
             box.style.color = '';
             box.style.fontSize = '';
 
-            const sorted = [...blacklist].sort((a, b) => a.localeCompare(b));
-            sorted.forEach(login => {
+            list.forEach(b => {
                 const row = document.createElement('div');
                 row.className = 'saved-channel';
                 row.style.cursor = 'default';
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
-                nameSpan.textContent = login;
+                const hoursLeft = Math.max(0, 24 - (Date.now() - b.addedAt) / (1000 * 60 * 60));
+                nameSpan.textContent = `${b.login} (${hoursLeft.toFixed(1)} h jäljellä)`;
                 row.appendChild(nameSpan);
 
                 const btn = document.createElement('button');
                 btn.className = 'close-btn';
                 btn.textContent = 'X';
                 btn.title = 'Poista mustalta listalta';
-                btn.addEventListener('click', () => unblockChannel(login));
+                btn.addEventListener('click', () => unblockChannel(b.login));
                 row.appendChild(btn);
 
                 box.appendChild(row);
@@ -800,11 +855,13 @@
         }
 
         function getDotStatus(c) {
-            if (c.plat === 'kick') {
-                return { cls: 'unknown', title: 'Kick: live-tila ei tiedossa ilman OAuth-kirjautumista' };
-            }
             if (c.isLive === null) {
-                return { cls: 'unknown', title: "Paina 'Paivita' hakeaksesi live-tilan Twitchista" };
+                return {
+                    cls: 'unknown',
+                    title: c.plat === 'kick'
+                        ? 'Live-tila ei tiedossa (Kick: kokeellinen, ei taattu toimimaan ilman virallista API:a)'
+                        : "Paina 'Paivita' hakeaksesi live-tilan Twitchista"
+                };
             }
             if (c.isLive === false) {
                 return { cls: 'offline', title: 'Ei livena' };
@@ -1094,24 +1151,20 @@
                 if (s.style.display === 'none') return;
 
                 const isEmpty = !s.dataset.name;
-                let isOfflineTwitch = false;
-                if (!isEmpty && s.dataset.plat === 'twitch') {
-                    const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === 'twitch');
-                    isOfflineTwitch = !!(entry && entry.isLive === false);
+                let isOfflineKnown = false;
+                if (!isEmpty) {
+                    const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
+                    isOfflineKnown = !!(entry && entry.isLive === false);
                 }
 
-                if (!isEmpty && !isOfflineTwitch) return;
+                if (!isEmpty && !isOfflineKnown) return;
 
                 const excludeNames = slots.map(sl => sl.dataset.name).filter(Boolean);
                 const candidates = savedChannels.filter(c => {
-                    if (c.plat !== 'twitch') return false;
                     if (c.isLive !== true) return false;
                     if (excludeNames.includes(c.name)) return false;
-                    if (blacklist.includes(c.name.toLowerCase())) return false;
+                    if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
                     if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
-                    // Kategoriasuodatin sovelletaan VAIN jos joku kategoria on merkitty vihreaksi (kaytossa).
-                    // Jos vihreita kategorioita ei ole, taytto ei ikina saisi loytaa ehdokkaita - siksi
-                    // suodatinta ei tallöin sovelleta ollenkaan.
                     if (categoryFilterEnabled && enabledCategories.length > 0) {
                         const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
                         if (!matches) return false;
@@ -1128,9 +1181,6 @@
             });
         }
 
-        // Sulkee playerissa jo pyorivan Twitch-striimin jos sen kategoria ei enaa tasmaa vihreaksi
-        // merkittyihin kategorioihin (vaatii seka Automaattisen taytön etta Suosi-vain-haettuja-kategorioita
-        // -asetuksen). runAutoFill taytta vapautuneen paikan heti perassa sopivalla ehdokkaalla.
         function checkCategoryEviction() {
             if (!autoFillEnabled || !categoryFilterEnabled) return;
             const enabledCategories = getEnabledCategoryNames();
@@ -1174,7 +1224,7 @@
             const clean = term.trim();
             if (!clean) return;
             categoryHistory = categoryHistory.filter(h => h.name.toLowerCase() !== clean.toLowerCase());
-            categoryHistory.unshift({ name: clean, enabled: true });
+            categoryHistory.unshift({ name: clean, enabled: false });
             if (categoryHistory.length > 15) categoryHistory = categoryHistory.slice(0, 15);
             persistCategoryHistory();
             renderCategoryHistory();
@@ -1276,7 +1326,7 @@
                     if (s.viewer_count < 5) return false;
                     const login = s.user_login.toLowerCase();
                     if (activeLogins.includes(login)) return false;
-                    if (blacklist.includes(login)) return false;
+                    if (blacklist.some(b => b.login === login)) return false;
                     const startedMs = new Date(s.started_at).getTime();
                     const hoursLive = (nowMs - startedMs) / (1000 * 60 * 60);
                     if (hoursLive > uptimeFilterHours) return false;
@@ -1289,11 +1339,15 @@
                     return;
                 }
 
+                // Aikaleima pakottaa selaimen hakemaan tuoreen pienoiskuvan sen sijaan etta
+                // nayttaa valimuistista mahdollisesti tunteja vanhaa kuvaa.
+                const cacheBuster = Date.now();
+
                 filtered.forEach(s => {
                     const login = s.user_login.toLowerCase();
 
-                    const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45');
-                    const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180');
+                    const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45') + `?t=${cacheBuster}`;
+                    const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180') + `?t=${cacheBuster}`;
 
                     const preloadImg = new Image();
                     preloadImg.src = bigThumbUrl;
@@ -1327,9 +1381,8 @@
 
                     linkArea.appendChild(createPlatformBadge('twitch'));
 
-                    const dot = document.createElement('span');
-                    dot.className = 'status-dot live';
-                    linkArea.appendChild(dot);
+                    // Ei status-pallo tassa: nama ovat jo tiedetysti livena, koska ne haettiin
+                    // suoraan Twitchin livena-olevien striimien listalta.
 
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'name-text';
@@ -1399,6 +1452,44 @@
             }
         }
 
+        // Kokeellinen, EPAVIRALLINEN Kickin live-tilan haku (Kickilla ei ole julkista API:a ilman
+        // OAuth-kirjautumista). Kick kayttaa Cloudflare-bottisuojausta joka voi estaa taman
+        // kokonaan selaimesta kasin (CORS-virhe) - talloin tama vain epaonnistuu hiljaisesti eika
+        // riko mitaan, Kick-kanavat pysyvat "tuntematon"-tilassa kuten ennenkin.
+        async function refreshKickLiveStatus() {
+            const kickChannels = savedChannels.filter(c => c.plat === 'kick');
+            if (kickChannels.length === 0) return;
+
+            let anyUpdated = false;
+            for (const c of kickChannels) {
+                try {
+                    const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(c.name)}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && 'livestream' in data) {
+                        c.isLive = data.livestream !== null && data.livestream !== undefined;
+                        if (c.isLive) {
+                            if (data.livestream.viewer_count !== undefined) c.viewerCount = data.livestream.viewer_count;
+                            if (data.livestream.categories && data.livestream.categories[0] && data.livestream.categories[0].name) {
+                                c.gameName = data.livestream.categories[0].name;
+                            }
+                        }
+                        anyUpdated = true;
+                    }
+                } catch (e) {
+                    // CORS-esto tms. - jatetaan kanavan tila ennalleen, ei kaadeta mitaan.
+                }
+            }
+            if (anyUpdated) {
+                persistSavedChannels();
+                renderSavedList();
+                checkCategoryEviction();
+                if (autoFillEnabled) runAutoFill();
+            }
+        }
+
         // ---------- Automaattinen paivitys: kytkin + sekuntilaskuri + vali-liukusaadin ----------
 
         function updateAutoRefreshUI() {
@@ -1434,6 +1525,7 @@
                 await refreshTwitchLiveStatus(true);
                 if (lastCategoryQuery) await searchTwitchCategory(true);
             }
+            await refreshKickLiveStatus();
         }
 
         setInterval(() => {
@@ -1446,11 +1538,20 @@
             updateAutoRefreshUI();
         }, 1000);
 
+        // Mustan listan 24h-vanheneminen tarkistetaan minuutin valein, riippumatta Automaattinen
+        // paivitys -kytkimesta.
+        setInterval(() => {
+            pruneExpiredBlacklist();
+            if (document.getElementById('blacklistModal').style.display === 'flex') {
+                renderBlacklistModal();
+            }
+        }, 60 * 1000);
+
         // ---------- Asetusten vienti / tuonti ----------
 
         function exportSettings() {
             const data = {
-                version: 5,
+                version: 6,
                 exportedAt: new Date().toISOString(),
                 myChannels: JSON.parse(localStorage.getItem('myChannels') || '[]'),
                 twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
@@ -1535,6 +1636,7 @@
         updateAddButtonColor();
         updateAutoRefreshUI();
         restoreCollapsibleStates();
+        pruneExpiredBlacklist();
         initSlots();
         setupResizablePersistence('activeContent', 'boxHeight_active');
         setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
@@ -1543,6 +1645,7 @@
             if (e.target.id === 'blacklistModal') closeBlacklistModal();
         });
         if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
+        refreshKickLiveStatus();
     </script>
 </body>
 </html>
