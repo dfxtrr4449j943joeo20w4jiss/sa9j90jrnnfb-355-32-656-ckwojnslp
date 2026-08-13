@@ -275,6 +275,1868 @@
                 </div>
 
                 <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch + Kick) <span id="categorySearchIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Näyttää sekä Twitch- että Kick-tulokset samassa listassa. Kick-haku on KOKEELLINEN ja EPÄVIRALLINEN (ei julkista kategoria-API:a ilman OAuth-kirjautumista) — Cloudflare voi estää sen kokonaan selaimesta käsin, jolloin vain Twitch-tulokset näkyvät eikä mikään muu hajoa.">?</button>
+                </div>
+                <div id="categorySearchBody">
+                    <div class="manual-add-box">
+                        <input type="text" id="categoryInput" placeholder="Esim. Just Chatting, VRChat..." autocomplete="off" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); searchTwitchCategory(); }">
+                        <button class="btn-add btn-twitch" onclick="searchTwitchCategory()">Hae livenä olevat</button>
+                        <div class="history-list" id="categoryHistoryList"></div>
+                    </div>
+                </div>
+
+                <div id="categoryResults" class="list-scroll-box grow" style="font-size:13px; color:#888;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const VALID_GRID_MODES = [1, 2, 3];
+        const storedGridMode = parseInt(localStorage.getItem('gridMode'));
+        let gridMode = VALID_GRID_MODES.includes(storedGridMode) ? storedGridMode : 3;
+
+        let savedChannels = [];
+        try {
+            const raw = JSON.parse(localStorage.getItem('myChannels'));
+            if (Array.isArray(raw)) savedChannels = raw;
+        } catch (e) { savedChannels = []; }
+
+        savedChannels = savedChannels.map(c => ({
+            name: c.name,
+            plat: c.plat,
+            lastClosedLiveAt: c.lastClosedLiveAt || 0,
+            isLive: (typeof c.isLive === 'boolean') ? c.isLive : null,
+            viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null,
+            gameName: (typeof c.gameName === 'string') ? c.gameName : null
+        }));
+
+        let twitchCreds = { clientId: '', token: '' };
+        try {
+            const rawCreds = JSON.parse(localStorage.getItem('twitchCreds'));
+            if (rawCreds) twitchCreds = rawCreds;
+        } catch (e) { twitchCreds = { clientId: '', token: '' }; }
+
+        let categoryHistory = [];
+        try {
+            const rawHist = JSON.parse(localStorage.getItem('categoryHistory'));
+            if (Array.isArray(rawHist)) {
+                categoryHistory = rawHist.map(h => {
+                    if (typeof h === 'string') return { name: h, enabled: true };
+                    return { name: h.name, enabled: h.enabled !== false };
+                });
+            }
+        } catch (e) { categoryHistory = []; }
+
+        let blacklist = [];
+        try {
+            const rawBl = JSON.parse(localStorage.getItem('blacklist'));
+            if (Array.isArray(rawBl)) {
+                blacklist = rawBl.map(b => {
+                    if (typeof b === 'string') return { login: b, addedAt: Date.now() };
+                    return { login: b.login, addedAt: (typeof b.addedAt === 'number') ? b.addedAt : Date.now() };
+                });
+            }
+        } catch (e) { blacklist = []; }
+        let blacklistSortMode = 'alpha';
+
+        let bannedTitleWords = [];
+        try {
+            const rawBw = JSON.parse(localStorage.getItem('bannedTitleWords'));
+            if (Array.isArray(rawBw)) bannedTitleWords = rawBw;
+        } catch (e) { bannedTitleWords = []; }
+
+        let uptimeFilterHours = 30;
+        try {
+            const storedUp = parseInt(localStorage.getItem('uptimeFilterHours'));
+            if (storedUp >= 6 && storedUp <= 30) uptimeFilterHours = storedUp;
+        } catch (e) { uptimeFilterHours = 30; }
+
+        let duplicateCheckEnabled = false;
+        try { duplicateCheckEnabled = localStorage.getItem('duplicateCheckEnabled') === 'true'; } catch (e) { duplicateCheckEnabled = false; }
+
+        let duplicateNameThreshold = 80;
+        try {
+            const storedDup = parseInt(localStorage.getItem('duplicateNameThreshold'));
+            if (storedDup >= 50 && storedDup <= 100) duplicateNameThreshold = storedDup;
+        } catch (e) { duplicateNameThreshold = 80; }
+
+        let visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        try {
+            const storedOrder = JSON.parse(localStorage.getItem('visualOrder'));
+            if (Array.isArray(storedOrder) && storedOrder.length === 9) {
+                const asSet = new Set(storedOrder);
+                if (asSet.size === 9 && [...asSet].every(v => Number.isInteger(v) && v >= 0 && v <= 8)) {
+                    visualOrder = storedOrder;
+                }
+            }
+        } catch (e) { /* pidetaan oletusjarjestys */ }
+
+        let slots = [];
+        let lastCategoryQuery = '';
+
+        let autoRefreshIntervalSeconds = 120;
+        try {
+            const storedInterval = parseInt(localStorage.getItem('autoRefreshIntervalSeconds'));
+            if (storedInterval >= 10 && storedInterval <= 600) autoRefreshIntervalSeconds = storedInterval;
+        } catch (e) { autoRefreshIntervalSeconds = 120; }
+
+        let autoRefreshEnabled = true;
+        try {
+            const storedAR = localStorage.getItem('autoRefreshEnabled');
+            autoRefreshEnabled = storedAR === null ? true : storedAR === 'true';
+        } catch (e) { autoRefreshEnabled = true; }
+        let autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
+
+        let autoFillEnabled = false;
+        try {
+            autoFillEnabled = localStorage.getItem('autoFillEnabled') === 'true';
+        } catch (e) { autoFillEnabled = false; }
+
+        let categoryFilterEnabled = true;
+        try {
+            const storedCF = localStorage.getItem('categoryFilterEnabled');
+            categoryFilterEnabled = storedCF === null ? true : storedCF === 'true';
+        } catch (e) { categoryFilterEnabled = true; }
+
+        function persistSavedChannels() {
+            localStorage.setItem('myChannels', JSON.stringify(savedChannels));
+        }
+
+        function persistCategoryHistory() {
+            localStorage.setItem('categoryHistory', JSON.stringify(categoryHistory));
+        }
+
+        function getEnabledCategoryNames() {
+            return categoryHistory.filter(h => h.enabled).map(h => h.name);
+        }
+
+        // ---------- Levenshtein-pohjainen nimien samankaltaisuus (0-100%) ----------
+
+        function levenshteinDistance(a, b) {
+            const m = a.length, n = b.length;
+            const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+            for (let i = 0; i <= m; i++) dp[i][0] = i;
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1];
+                    else dp[i][j] = 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+                }
+            }
+            return dp[m][n];
+        }
+
+        function nameSimilarityPercent(a, b) {
+            a = a.toLowerCase(); b = b.toLowerCase();
+            const maxLen = Math.max(a.length, b.length);
+            if (maxLen === 0) return 100;
+            return Math.round((1 - levenshteinDistance(a, b) / maxLen) * 100);
+        }
+
+        // ---------- Visuaalinen jarjestys (order-pohjainen, ei DOM-siirtoja) ----------
+
+        function applyVisualOrder() {
+            visualOrder.forEach((physicalIdx, visualPos) => {
+                slots[physicalIdx].style.order = visualPos;
+            });
+        }
+
+        function getVisualPos(physicalIdx) {
+            return visualOrder.indexOf(physicalIdx);
+        }
+
+        function updateSlotNumbering() {
+            slots.forEach((s, physicalIdx) => {
+                if (!s.dataset.name) return;
+                const labelText = s.querySelector('.stream-label-text');
+                if (labelText) {
+                    const vp = getVisualPos(physicalIdx);
+                    labelText.textContent = `${vp + 1}. ${s.dataset.name}`;
+                }
+            });
+        }
+
+        // ---------- Alustaikonit (ei virallisia logoja - varilliset kirjainmerkit) ----------
+
+        function createPlatformBadge(plat) {
+            const badge = document.createElement('span');
+            badge.className = 'platform-badge ' + (plat === 'twitch' ? 'platform-twitch' : 'platform-kick');
+            badge.textContent = plat === 'twitch' ? 'T' : 'K';
+            badge.title = plat === 'twitch' ? 'Twitch' : 'Kick';
+            return badge;
+        }
+
+        function createStreamLabel(physicalIdx, name, plat) {
+            const label = document.createElement('div');
+            label.className = 'stream-label';
+            label.appendChild(createPlatformBadge(plat));
+            const textSpan = document.createElement('span');
+            textSpan.className = 'stream-label-text';
+            const vp = getVisualPos(physicalIdx);
+            textSpan.textContent = `${vp + 1}. ${name}`;
+            label.appendChild(textSpan);
+            return label;
+        }
+
+        // ---------- Lisaa-napin vari alustan mukaan ----------
+
+        function updateAddButtonColor() {
+            const plat = document.getElementById('platform').value;
+            const btn = document.getElementById('addChannelBtn');
+            if (plat === 'twitch') {
+                btn.classList.remove('btn-kick');
+                btn.classList.add('btn-twitch');
+            } else {
+                btn.classList.remove('btn-twitch');
+                btn.classList.add('btn-kick');
+            }
+        }
+
+        // ---------- Kanavaehdotukset nimikentassa ----------
+
+        function updateChannelSuggestions() {
+            const box = document.getElementById('channelSuggestions');
+            const input = document.getElementById('channelInput');
+            const query = input.value.trim().toLowerCase();
+            const plat = document.getElementById('platform').value;
+
+            box.innerHTML = '';
+            if (!query) return;
+
+            const matches = savedChannels
+                .filter(c => c.plat === plat && c.name.toLowerCase().includes(query))
+                .slice(0, 8);
+
+            matches.forEach(c => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'suggestion-chip';
+                chip.textContent = c.name;
+                chip.addEventListener('click', () => {
+                    input.value = '';
+                    box.innerHTML = '';
+                    processNewChannelManual(c.name, c.plat);
+                });
+                box.appendChild(chip);
+            });
+        }
+
+        // ---------- Laatikoiden koon muistaminen ----------
+
+        function setupResizablePersistence(elId, storageKey) {
+            const el = document.getElementById(elId);
+            const stored = parseInt(localStorage.getItem(storageKey));
+            if (stored && stored >= 150) {
+                el.style.height = stored + 'px';
+            }
+            const observer = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const h = Math.round(entry.contentRect.height);
+                    if (h >= 100) {
+                        localStorage.setItem(storageKey, h);
+                    }
+                }
+            });
+            observer.observe(el);
+        }
+
+        // ---------- Kokoontaitettavat osiot ----------
+
+        function toggleCollapsible(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            const collapsed = content.style.display !== 'none';
+            content.style.display = collapsed ? 'none' : 'block';
+            icon.innerText = collapsed ? '▲' : '▼';
+            persistCollapsibleState(contentId, collapsed);
+        }
+
+        function persistCollapsibleState(contentId, isCollapsed) {
+            let states = {};
+            try { states = JSON.parse(localStorage.getItem('collapsibleStates') || '{}'); } catch (e) { states = {}; }
+            states[contentId] = isCollapsed;
+            localStorage.setItem('collapsibleStates', JSON.stringify(states));
+        }
+
+        function restoreCollapsibleStates() {
+            let states = {};
+            try { states = JSON.parse(localStorage.getItem('collapsibleStates') || '{}'); } catch (e) { states = {}; }
+            const sections = [
+                { contentId: 'activeContent', iconId: 'toggleIcon', defaultCollapsed: true },
+                { contentId: 'twitchListWrap', iconId: 'twitchToggleIcon', defaultCollapsed: false },
+                { contentId: 'kickListWrap', iconId: 'kickToggleIcon', defaultCollapsed: false },
+                { contentId: 'twitchCredsBody', iconId: 'twitchCredsIcon', defaultCollapsed: false },
+                { contentId: 'liveStatusBody', iconId: 'liveStatusIcon', defaultCollapsed: false },
+                { contentId: 'backupBody', iconId: 'backupIcon', defaultCollapsed: false },
+                { contentId: 'categorySearchBody', iconId: 'categorySearchIcon', defaultCollapsed: false }
+            ];
+            sections.forEach(sec => {
+                const collapsed = states.hasOwnProperty(sec.contentId) ? states[sec.contentId] : sec.defaultCollapsed;
+                const content = document.getElementById(sec.contentId);
+                const icon = document.getElementById(sec.iconId);
+                if (!content || !icon) return;
+                content.style.display = collapsed ? 'none' : 'block';
+                icon.innerText = collapsed ? '▲' : '▼';
+            });
+        }
+
+        function toggleActiveList() { toggleCollapsible('activeContent', 'toggleIcon'); }
+
+        // ---------- Isompi esikatselukuva hiiren paalla ----------
+
+        function showThumbPreview(e, imgUrl) {
+            const preview = document.getElementById('thumbPreview');
+            preview.querySelector('img').src = imgUrl;
+            const rect = e.currentTarget.getBoundingClientRect();
+            let top = rect.top + (rect.height / 2) - 90;
+            top = Math.max(10, Math.min(top, window.innerHeight - 190));
+            preview.style.top = top + 'px';
+            preview.style.display = 'block';
+        }
+
+        function hideThumbPreview() {
+            document.getElementById('thumbPreview').style.display = 'none';
+        }
+
+        // ---------- Blacklist ----------
+        // HUOM: blacklist-merkinnat EIVAT vanhene/poistu koskaan automaattisesti.
+        // Ainoastaan modaalissa nakyva "lisatty X min Y sek" -ika-teksti lakkaa
+        // nakymasta 60 minuutin jalkeen (ks. formatBlacklistAge) - itse esto sailyy
+        // kunnes kayttaja poistaa sen manuaalisesti X-napista.
+
+        function persistBlacklist() {
+            localStorage.setItem('blacklist', JSON.stringify(blacklist));
+        }
+
+        function blockChannel(login) {
+            login = login.toLowerCase();
+            if (!blacklist.some(b => b.login === login)) {
+                blacklist.push({ login, addedAt: Date.now() });
+                persistBlacklist();
+            }
+            // Poista blokattu kanava myos tallennetuista kanavista - molemmilta
+            // alustoilta, koska sama striimaajanimi voi olla tallennettuna seka
+            // Twitchiin etta Kickiin.
+            const hadSaved = savedChannels.some(c => c.name.toLowerCase() === login);
+            if (hadSaved) {
+                savedChannels = savedChannels.filter(c => c.name.toLowerCase() !== login);
+                persistSavedChannels();
+                renderLists();
+            }
+        }
+
+        function unblockChannel(login) {
+            blacklist = blacklist.filter(b => b.login !== login);
+            persistBlacklist();
+            renderBlacklistModal();
+        }
+
+        function setBlacklistSort(mode) {
+            blacklistSortMode = mode;
+            renderBlacklistModal();
+        }
+
+        function openBlacklistModal() {
+            renderBlacklistModal();
+            document.getElementById('blacklistModal').style.display = 'flex';
+        }
+
+        function closeBlacklistModal() {
+            document.getElementById('blacklistModal').style.display = 'none';
+        }
+
+        function formatBlacklistAge(addedAt) {
+            const elapsedMs = Date.now() - addedAt;
+            const elapsedMin = Math.floor(elapsedMs / 60000);
+            if (elapsedMin >= 60) return null;
+            const sec = Math.floor((elapsedMs % 60000) / 1000);
+            return `lisätty ${elapsedMin}min ${sec}sek`;
+        }
+
+        function renderBlacklistModal() {
+            const box = document.getElementById('blacklistList');
+            const countEl = document.getElementById('blacklistCount');
+            if (countEl) countEl.textContent = blacklist.length;
+
+            ['sortBtnAlpha', 'sortBtnNewest', 'sortBtnOldest'].forEach(id => document.getElementById(id).classList.remove('sort-active'));
+            const activeBtnId = blacklistSortMode === 'alpha' ? 'sortBtnAlpha' : (blacklistSortMode === 'newest' ? 'sortBtnNewest' : 'sortBtnOldest');
+            document.getElementById(activeBtnId).classList.add('sort-active');
+
+            const searchInput = document.getElementById('blacklistSearchInput');
+            const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+            box.innerHTML = '';
+            if (blacklist.length === 0) {
+                box.textContent = 'Musta lista on tyhja.';
+                box.style.color = '#666';
+                box.style.fontSize = '13px';
+                return;
+            }
+
+            let list = blacklist.filter(b => !query || b.login.includes(query));
+            if (blacklistSortMode === 'alpha') {
+                list = [...list].sort((a, b) => a.login.localeCompare(b.login));
+            } else if (blacklistSortMode === 'newest') {
+                list = [...list].sort((a, b) => b.addedAt - a.addedAt);
+            } else {
+                list = [...list].sort((a, b) => a.addedAt - b.addedAt);
+            }
+
+            if (list.length === 0) {
+                box.textContent = 'Ei hakua vastaavia nimia.';
+                box.style.color = '#666';
+                box.style.fontSize = '13px';
+                return;
+            }
+            box.style.color = '';
+            box.style.fontSize = '';
+
+            list.forEach(b => {
+                const row = document.createElement('div');
+                row.className = 'saved-channel';
+                row.style.cursor = 'default';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name-text';
+                const ageText = formatBlacklistAge(b.addedAt);
+                nameSpan.textContent = ageText ? `${b.login} - ${ageText}` : b.login;
+                row.appendChild(nameSpan);
+
+                const btn = document.createElement('button');
+                btn.className = 'close-btn';
+                btn.textContent = 'X';
+                btn.title = 'Poista mustalta listalta';
+                btn.addEventListener('click', () => unblockChannel(b.login));
+                row.appendChild(btn);
+
+                box.appendChild(row);
+            });
+        }
+
+        // ---------- Kielletyt sanat otsikossa ----------
+
+        function persistBannedWords() {
+            localStorage.setItem('bannedTitleWords', JSON.stringify(bannedTitleWords));
+        }
+
+        function promptBannedWord() {
+            const word = prompt('Kirjoita teksti jonka esiintyessa striimin otsikossa se piilotetaan hakutuloksista (ei erota isoja/pienia kirjaimia). Muista kayttaa tarkkaa muotoa, esim. valilyonnit, jotta esim. " RR " ei osu sanaan "soRRy".');
+            if (!word) return;
+            if (!bannedTitleWords.includes(word)) {
+                bannedTitleWords.push(word);
+                persistBannedWords();
+                renderBannedWords();
+            }
+        }
+
+        function renderBannedWords() {
+            const box = document.getElementById('bannedWordsList');
+            box.innerHTML = '';
+            bannedTitleWords.forEach(word => {
+                const chip = document.createElement('span');
+                chip.className = 'history-chip';
+
+                const label = document.createElement('span');
+                label.className = 'history-chip-label';
+                label.style.cursor = 'default';
+                label.textContent = word;
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'history-chip-remove';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Poista suodatuslistalta';
+                removeBtn.addEventListener('click', () => {
+                    bannedTitleWords = bannedTitleWords.filter(w => w !== word);
+                    persistBannedWords();
+                    renderBannedWords();
+                });
+                chip.appendChild(removeBtn);
+
+                box.appendChild(chip);
+            });
+        }
+
+        // ---------- Suodattimet: lahetysaika, kaksoiskappaleet ----------
+
+        function onUptimeFilterChange() {
+            uptimeFilterHours = parseInt(document.getElementById('uptimeFilterSlider').value);
+            localStorage.setItem('uptimeFilterHours', uptimeFilterHours);
+            updateUptimeFilterLabel();
+        }
+
+        function updateUptimeFilterLabel() {
+            document.getElementById('uptimeFilterValue').textContent = uptimeFilterHours + ' h';
+        }
+
+        function onDuplicateCheckToggleChange() {
+            duplicateCheckEnabled = document.getElementById('duplicateCheckToggle').checked;
+            localStorage.setItem('duplicateCheckEnabled', duplicateCheckEnabled);
+        }
+
+        function onDuplicateThresholdChange() {
+            duplicateNameThreshold = parseInt(document.getElementById('duplicateThresholdSlider').value);
+            localStorage.setItem('duplicateNameThreshold', duplicateNameThreshold);
+            updateDuplicateThresholdLabel();
+        }
+
+        function updateDuplicateThresholdLabel() {
+            document.getElementById('duplicateThresholdValue').textContent = duplicateNameThreshold + '%';
+        }
+
+        function checkDuplicateNames() {
+            if (!duplicateCheckEnabled) return;
+            const active = slots.map((s, i) => ({ i, name: s.dataset.name, plat: s.dataset.plat })).filter(x => x.name);
+            const twitchActive = active.filter(x => x.plat === 'twitch');
+            const kickActive = active.filter(x => x.plat === 'kick');
+
+            kickActive.forEach(k => {
+                const stillThere = slots[k.i].dataset.name === k.name;
+                if (!stillThere) return;
+                twitchActive.forEach(t => {
+                    if (slots[k.i].dataset.name !== k.name) return; // jo suljettu toisen osuman takia
+                    const sim = nameSimilarityPercent(k.name, t.name);
+                    if (sim >= duplicateNameThreshold) {
+                        clearSlot(k.i);
+                    }
+                });
+            });
+        }
+
+        // ---------- Slottien ohjauspainikkeet ----------
+
+        function buildEmptyControls(idx) {
+            const controls = document.createElement('div');
+            controls.className = 'slot-controls';
+            const handle = document.createElement('div');
+            handle.className = 'drag-handle';
+            handle.draggable = true;
+            handle.textContent = '☰';
+            handle.title = 'Siirra';
+            handle.addEventListener('dragstart', (e) => drag(e, idx));
+            handle.addEventListener('dragend', dragEnd);
+            controls.appendChild(handle);
+            return controls;
+        }
+
+        function buildActiveControls(idx, name, plat) {
+            const controls = document.createElement('div');
+            controls.className = 'slot-controls';
+
+            const handle = document.createElement('div');
+            handle.className = 'drag-handle';
+            handle.draggable = true;
+            handle.textContent = '☰';
+            handle.title = 'Siirra striimi';
+            handle.addEventListener('dragstart', (e) => drag(e, idx));
+            handle.addEventListener('dragend', dragEnd);
+            controls.appendChild(handle);
+
+            const heart = document.createElement('button');
+            heart.className = 'heart-btn';
+            heart.textContent = '♥';
+            heart.title = 'Lisaa/poista tallennetuista kanavista';
+            const isSaved = savedChannels.some(c => c.name === name && c.plat === plat);
+            heart.classList.toggle('favorited', isSaved);
+            heart.addEventListener('click', () => toggleSavedFromPlayer(name, plat, heart));
+            controls.appendChild(heart);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'close-btn';
+            closeBtn.textContent = 'X';
+            closeBtn.title = 'Sulje striimi';
+            closeBtn.addEventListener('click', () => clearSlot(idx));
+            controls.appendChild(closeBtn);
+
+            return controls;
+        }
+
+        function toggleSavedFromPlayer(name, plat, btnEl) {
+            const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
+            if (idx === -1) {
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                if (btnEl) btnEl.classList.add('favorited');
+            } else {
+                savedChannels.splice(idx, 1);
+                if (btnEl) btnEl.classList.remove('favorited');
+            }
+            persistSavedChannels();
+            renderSavedList();
+        }
+
+        // ---------- Slottien alustus ----------
+
+        function initSlots() {
+            const container = document.getElementById('streamGrid');
+            container.innerHTML = "";
+            slots = [];
+            for (let i = 0; i < 9; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'stream-slot';
+                slot.id = 'slot-' + i;
+                slot.ondragover = e => e.preventDefault();
+                slot.ondrop = drop;
+                slot.appendChild(buildEmptyControls(i));
+                const freeBtn = document.createElement('button');
+                freeBtn.textContent = 'Vapaa';
+                slot.appendChild(freeBtn);
+                container.appendChild(slot);
+                slots.push(slot);
+            }
+            applyVisualOrder();
+            updateGridDisplay();
+            renderLists();
+            restoreStreams();
+            updateSlotNumbering();
+        }
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            sb.classList.toggle('collapsed');
+            document.getElementById('toggleBtn').innerText = sb.classList.contains('collapsed') ? '▶' : '◀';
+        }
+
+        function toggleRightSidebar() {
+            const sb = document.getElementById('rightSidebar');
+            sb.classList.toggle('collapsed');
+            document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
+        }
+
+        // ---------- Listojen renderointi ----------
+
+        function updateLists() {
+            const activeList = document.getElementById('activeList');
+            activeList.innerHTML = "";
+            visualOrder.forEach((physicalIdx, visualPos) => {
+                const s = slots[physicalIdx];
+                if (s && s.dataset.name) {
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.textContent = `${visualPos + 1}. ${s.dataset.name}`;
+                    activeList.appendChild(item);
+                }
+            });
+            renderSavedList();
+        }
+
+        // Jarjestys: 1) vihrea (livena + kategoria tasmaa, tai livena kun suodatinta ei kaytossa) - eniten katsojia ensin
+        //            2) keltainen (livena, mutta eri kategoria) - eniten katsojia ensin
+        //            3) harmaa (tila ei tiedossa) - aakkosjarjestys
+        //            4) punainen (offline) - aakkosjarjestys
+        function sortSavedChannels(list) {
+            const enabledCategories = getEnabledCategoryNames();
+
+            function rank(c) {
+                if (c.isLive === true) {
+                    if (enabledCategories.length === 0) return 0;
+                    const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                    return matches ? 0 : 1;
+                }
+                if (c.isLive === false) return 3;
+                return 2;
+            }
+
+            return [...list].sort((a, b) => {
+                const ra = rank(a), rb = rank(b);
+                if (ra !== rb) return ra - rb;
+                if (ra === 0 || ra === 1) return (b.viewerCount || 0) - (a.viewerCount || 0);
+                return a.name.localeCompare(b.name);
+            });
+        }
+
+        function getDotStatus(c) {
+            if (c.isLive === null) {
+                return {
+                    cls: 'unknown',
+                    title: c.plat === 'kick'
+                        ? 'Live-tila ei tiedossa (Kick: kokeellinen, ei taattu toimimaan ilman virallista API:a)'
+                        : "Paina 'Paivita' hakeaksesi live-tilan Twitchista"
+                };
+            }
+            if (c.isLive === false) {
+                return { cls: 'offline', title: 'Ei livena' };
+            }
+            const enabledCategories = getEnabledCategoryNames();
+            if (enabledCategories.length > 0 && c.gameName) {
+                const matches = enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                if (matches) return { cls: 'live', title: `Livena - kategoria tasmaa (${c.gameName})` };
+                return { cls: 'category-mismatch', title: `Livena, mutta eri kategoriassa: ${c.gameName}` };
+            }
+            return { cls: 'live', title: c.gameName ? `Livena - ${c.gameName}` : 'Livena' };
+        }
+
+        function renderSavedList() {
+            const activeKeys = slots
+                .filter(s => s.dataset.name)
+                .map(s => `${s.dataset.plat}:${s.dataset.name}`);
+            const visible = savedChannels.filter(c => !activeKeys.includes(`${c.plat}:${c.name}`));
+            renderSavedListForPlatform(visible.filter(c => c.plat === 'twitch'), 'channelListTwitch');
+            renderSavedListForPlatform(visible.filter(c => c.plat === 'kick'), 'channelListKick');
+        }
+
+        function renderSavedListForPlatform(list, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            const sorted = sortSavedChannels(list);
+
+            sorted.forEach(c => {
+                const row = document.createElement('div');
+                row.className = 'saved-channel';
+
+                const left = document.createElement('span');
+                left.className = 'left-group';
+
+                left.appendChild(createPlatformBadge(c.plat));
+
+                const dot = document.createElement('span');
+                const status = getDotStatus(c);
+                dot.className = 'status-dot ' + status.cls;
+                dot.title = status.title;
+                left.appendChild(dot);
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name-text';
+                nameSpan.textContent = (c.isLive === true && typeof c.viewerCount === 'number')
+                    ? `${c.name} (${c.viewerCount.toLocaleString('fi-FI')})`
+                    : c.name;
+                left.appendChild(nameSpan);
+
+                row.appendChild(left);
+
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'close-btn';
+                closeBtn.textContent = 'X';
+                closeBtn.addEventListener('click', (e) => deleteCh(c.name, c.plat, e));
+                row.appendChild(closeBtn);
+
+                row.addEventListener('click', () => processNewChannelManual(c.name, c.plat));
+
+                container.appendChild(row);
+            });
+        }
+
+        function renderLists() { updateLists(); renderSavedList(); }
+
+        // ---------- Layoutin tallennus/palautus ----------
+
+        function saveLayout() {
+            let layout = {};
+            slots.forEach((s, i) => {
+                if (s.dataset.name) layout[i] = { name: s.dataset.name, plat: s.dataset.plat };
+            });
+            localStorage.setItem('activeLayout', JSON.stringify(layout));
+            localStorage.setItem('visualOrder', JSON.stringify(visualOrder));
+            updateLists();
+        }
+
+        function restoreStreams() {
+            let layout = null;
+            try { layout = JSON.parse(localStorage.getItem('activeLayout')); } catch (e) { layout = null; }
+            if (!layout) return;
+            for (let i in layout) loadStreamIntoSlot(i, layout[i].name, layout[i].plat);
+        }
+
+        // ---------- Striimin lataus ----------
+
+        function loadStreamIntoSlot(idx, name, plat) {
+            idx = parseInt(idx);
+            const url = plat === 'twitch'
+                ? `https://player.twitch.tv/?channel=${encodeURIComponent(name)}&parent=${window.location.hostname}&muted=true`
+                : `https://player.kick.com/${encodeURIComponent(name)}?muted=true`;
+
+            slots[idx].dataset.name = name;
+            slots[idx].dataset.plat = plat;
+            slots[idx].innerHTML = '';
+            slots[idx].appendChild(buildActiveControls(idx, name, plat));
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'stream-wrapper';
+
+            wrapper.appendChild(createStreamLabel(idx, name, plat));
+
+            const iframe = document.createElement('iframe');
+            iframe.src = url;
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+            iframe.setAttribute('allow', 'autoplay; encrypted-media');
+            iframe.setAttribute('referrerpolicy', 'no-referrer');
+            wrapper.appendChild(iframe);
+
+            slots[idx].appendChild(wrapper);
+            slots[idx].classList.add('active');
+            updateLists();
+        }
+
+        // ---------- Ruudukkokoko ----------
+
+        function updateGridDisplay() {
+            const container = document.getElementById('streamGrid');
+            container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
+            container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
+            document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + gridMode).classList.add('active');
+            slots.forEach((s, physicalIdx) => {
+                const vp = getVisualPos(physicalIdx);
+                s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
+            });
+        }
+
+        function changeGridMode(val) {
+            if (!VALID_GRID_MODES.includes(val)) return;
+            const oldVisibleCount = gridMode * gridMode;
+            gridMode = val;
+            localStorage.setItem('gridMode', val);
+            const newVisibleCount = gridMode * gridMode;
+            updateGridDisplay();
+
+            if (newVisibleCount > oldVisibleCount) {
+                slots.forEach((s, physicalIdx) => {
+                    const vp = getVisualPos(physicalIdx);
+                    if (vp >= oldVisibleCount && vp < newVisibleCount && s.dataset.name) {
+                        loadStreamIntoSlot(physicalIdx, s.dataset.name, s.dataset.plat);
+                    }
+                });
+            }
+        }
+
+        function muteAll() {
+            slots.forEach((s, i) => {
+                if (!s.dataset.name) return;
+                loadStreamIntoSlot(i, s.dataset.name, s.dataset.plat);
+            });
+        }
+
+        // ---------- Raahaus: VAIN visuaalisen jarjestyksen vaihto, ei koskaan DOM-siirtoa ----------
+
+        function drag(e, i) {
+            e.dataTransfer.setData("src", i);
+            document.body.classList.add('dragging-active');
+        }
+
+        function dragEnd(e) {
+            document.body.classList.remove('dragging-active');
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            document.body.classList.remove('dragging-active');
+            const srcIdx = parseInt(e.dataTransfer.getData("src"));
+            const target = e.target.closest('.stream-slot');
+            if (!target) return;
+            const targetIdx = parseInt(target.id.split('-')[1]);
+            if (isNaN(srcIdx) || srcIdx === targetIdx) return;
+
+            const srcHasStream = !!slots[srcIdx].dataset.name;
+            const targetHasStream = !!slots[targetIdx].dataset.name;
+            if (!srcHasStream && !targetHasStream) return;
+
+            const srcVisualPos = getVisualPos(srcIdx);
+            const targetVisualPos = getVisualPos(targetIdx);
+            visualOrder[srcVisualPos] = targetIdx;
+            visualOrder[targetVisualPos] = srcIdx;
+
+            applyVisualOrder();
+            updateGridDisplay();
+            updateSlotNumbering();
+            saveLayout();
+        }
+
+        // ---------- Kanavien lisays / poisto ----------
+
+        function processNewChannel() {
+            const input = document.getElementById('channelInput');
+            const name = input.value.trim().toLowerCase();
+            const plat = document.getElementById('platform').value;
+            if (!name) return;
+            if (!savedChannels.find(c => c.name === name && c.plat === plat)) {
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                persistSavedChannels();
+            }
+            let loaded = false;
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    loaded = true;
+                    break;
+                }
+            }
+            if (loaded) {
+                input.value = "";
+                document.getElementById('channelSuggestions').innerHTML = '';
+            } else {
+                renderSavedList();
+                alert('Kaikki 9 paikkaa ovat kaytossa. Kanava tallennettiin listaan, mutta sita ei ladattu playeriin. Vapauta jokin paikka ensin.');
+            }
+        }
+
+        function processNewChannelManual(name, plat) {
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    return true;
+                }
+            }
+            alert('Kaikki 9 paikkaa ovat kaytossa. Vapauta jokin paikka ensin.');
+            return false;
+        }
+
+        function loadFromCategorySearch(name, plat) {
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    return true;
+                }
+            }
+            alert('Kaikki 9 paikkaa ovat kaytossa. Vapauta jokin paikka ensin.');
+            return false;
+        }
+
+        function deleteCh(name, plat, e) {
+            e.stopPropagation();
+            if (confirm("Oletko varma, etta haluat poistaa kanavan " + name + " tallennetuista?")) {
+                savedChannels = savedChannels.filter(c => !(c.name === name && c.plat === plat));
+                persistSavedChannels();
+                renderLists();
+            }
+        }
+
+        function clearSlot(i) {
+            const name = slots[i].dataset.name;
+            const plat = slots[i].dataset.plat;
+            if (name) {
+                const entry = savedChannels.find(c => c.name === name && c.plat === plat);
+                if (entry && entry.isLive !== false) {
+                    entry.lastClosedLiveAt = Date.now();
+                    persistSavedChannels();
+                }
+            }
+            slots[i].innerHTML = '';
+            slots[i].appendChild(buildEmptyControls(i));
+            const freeBtn = document.createElement('button');
+            freeBtn.textContent = 'Vapaa';
+            slots[i].appendChild(freeBtn);
+            slots[i].classList.remove('active');
+            delete slots[i].dataset.name;
+            delete slots[i].dataset.plat;
+            saveLayout();
+        }
+
+        function clearAll() {
+            slots.forEach((s, i) => clearSlot(i));
+            localStorage.removeItem('activeLayout');
+            visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            applyVisualOrder();
+            updateGridDisplay();
+            saveLayout();
+        }
+
+        // ---------- Automaattinen taytto + kategoriatarkistus ----------
+
+        function runAutoFill() {
+            const cooldownMs = 30 * 60 * 1000;
+            const now = Date.now();
+            const enabledCategories = getEnabledCategoryNames();
+
+            slots.forEach((s, i) => {
+                if (s.style.display === 'none') return;
+
+                const isEmpty = !s.dataset.name;
+                let isOfflineKnown = false;
+                if (!isEmpty) {
+                    const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
+                    isOfflineKnown = !!(entry && entry.isLive === false);
+                }
+
+                if (!isEmpty && !isOfflineKnown) return;
+
+                const excludeKeys = slots
+                    .filter(sl => sl.dataset.name)
+                    .map(sl => `${sl.dataset.plat}:${sl.dataset.name}`);
+
+                const candidates = savedChannels.filter(c => {
+                    if (c.isLive !== true) return false;
+                    if (excludeKeys.includes(`${c.plat}:${c.name}`)) return false;
+                    if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
+                    if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
+                    if (categoryFilterEnabled && enabledCategories.length > 0) {
+                        const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                        if (!matches) return false;
+                    }
+                    return true;
+                });
+                candidates.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
+                const candidate = candidates[0];
+
+                if (candidate) {
+                    loadStreamIntoSlot(i, candidate.name, candidate.plat);
+                    saveLayout();
+                }
+            });
+        }
+
+        function checkCategoryEviction() {
+            if (!autoFillEnabled || !categoryFilterEnabled) return;
+            const enabledCategories = getEnabledCategoryNames();
+            if (enabledCategories.length === 0) return;
+
+            slots.forEach((s, i) => {
+                if (!s.dataset.name || s.dataset.plat !== 'twitch') return;
+                const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === 'twitch');
+                if (!entry || entry.isLive !== true || !entry.gameName) return;
+
+                const matches = enabledCategories.some(h => h.toLowerCase() === entry.gameName.toLowerCase());
+                if (!matches) {
+                    clearSlot(i);
+                }
+            });
+        }
+
+        function onAutoFillToggleChange() {
+            autoFillEnabled = document.getElementById('autoFillToggle').checked;
+            localStorage.setItem('autoFillEnabled', autoFillEnabled);
+            if (autoFillEnabled) {
+                refreshTwitchLiveStatus(true);
+            }
+        }
+
+        function onCategoryFilterToggleChange() {
+            categoryFilterEnabled = document.getElementById('categoryFilterToggle').checked;
+            localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
+        }
+
+        // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan paivitys ----------
+
+        function saveTwitchCreds() {
+            twitchCreds.clientId = document.getElementById('twitchClientId').value.trim();
+            twitchCreds.token = document.getElementById('twitchToken').value.trim();
+            localStorage.setItem('twitchCreds', JSON.stringify(twitchCreds));
+            alert('Twitch-tunnukset tallennettu selaimen muistiin.');
+        }
+
+        function addToCategoryHistory(term) {
+            const clean = term.trim();
+            if (!clean) return;
+            // Sailyta olemassa olevan haun "kaytossa automaattitaytossa" -tila (vihrea pallo),
+            // vaikka sama kategoria haetaan uudelleen. Aiemmin tama nollasi tilan pois paalta
+            // (harmaaksi) joka kerta kun jo listalla ollutta kategoriaa haettiin uudelleen -
+            // esim. klikkaamalla vanhaa hakua ja painamalla "Hae livenä olevat" uudestaan.
+            const existing = categoryHistory.find(h => h.name.toLowerCase() === clean.toLowerCase());
+            const wasEnabled = existing ? existing.enabled : false;
+            categoryHistory = categoryHistory.filter(h => h.name.toLowerCase() !== clean.toLowerCase());
+            categoryHistory.unshift({ name: clean, enabled: wasEnabled });
+            if (categoryHistory.length > 15) categoryHistory = categoryHistory.slice(0, 15);
+            persistCategoryHistory();
+            renderCategoryHistory();
+        }
+
+        function renderCategoryHistory() {
+            const box = document.getElementById('categoryHistoryList');
+            box.innerHTML = '';
+            categoryHistory.forEach(h => {
+                const chip = document.createElement('span');
+                chip.className = 'history-chip';
+
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.className = 'category-toggle-dot' + (h.enabled ? ' on' : '');
+                dot.title = h.enabled
+                    ? 'Käytössä automaattitäytössä - klikkaa poistaaksesi käytöstä'
+                    : 'Pois käytöstä - klikkaa ottaaksesi mukaan automaattitäyttöön';
+                dot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    h.enabled = !h.enabled;
+                    persistCategoryHistory();
+                    renderCategoryHistory();
+                    renderSavedList();
+                });
+                chip.appendChild(dot);
+
+                const label = document.createElement('button');
+                label.type = 'button';
+                label.className = 'history-chip-label';
+                label.textContent = h.name;
+                label.addEventListener('click', () => {
+                    document.getElementById('categoryInput').value = h.name;
+                });
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'history-chip-remove';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Poista hakuhistoriasta';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    categoryHistory = categoryHistory.filter(x => x.name !== h.name);
+                    persistCategoryHistory();
+                    renderCategoryHistory();
+                    renderSavedList();
+                });
+                chip.appendChild(removeBtn);
+
+                box.appendChild(chip);
+            });
+        }
+
+        // Rakentaa yhden kategoriahaun tulosrivin (kayttaa seka Twitch- etta Kick-tulokset).
+        function buildCategoryResultItem({ plat, login, displayName, viewerCount, smallThumbUrl, bigThumbUrl, linkUrl }) {
+            const item = document.createElement('div');
+            item.className = 'saved-channel';
+            item.style.cursor = 'default';
+
+            const linkArea = document.createElement('a');
+            linkArea.className = 'left-group';
+            linkArea.href = linkUrl;
+            linkArea.target = '_blank';
+            linkArea.rel = 'noopener noreferrer';
+            linkArea.style.cursor = 'pointer';
+            linkArea.addEventListener('click', (e) => {
+                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                    e.preventDefault();
+                    const loaded = loadFromCategorySearch(login, plat);
+                    if (loaded) item.remove();
+                }
+            });
+
+            if (smallThumbUrl) {
+                const thumb = document.createElement('img');
+                thumb.className = 'stream-thumb';
+                thumb.src = smallThumbUrl;
+                thumb.alt = '';
+                thumb.loading = 'lazy';
+                if (bigThumbUrl) {
+                    thumb.addEventListener('mouseenter', (e) => showThumbPreview(e, bigThumbUrl));
+                    thumb.addEventListener('mouseleave', hideThumbPreview);
+                }
+                linkArea.appendChild(thumb);
+            }
+
+            linkArea.appendChild(createPlatformBadge(plat));
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'name-text';
+            nameSpan.textContent = `${displayName} (${(viewerCount || 0).toLocaleString('fi-FI')})`;
+            linkArea.appendChild(nameSpan);
+
+            item.appendChild(linkArea);
+
+            const blockBtn = document.createElement('button');
+            blockBtn.className = 'block-btn';
+            blockBtn.textContent = 'Block';
+            blockBtn.title = 'Esta tama kanava nakymasta hakutuloksissa';
+            blockBtn.addEventListener('click', () => {
+                blockChannel(login);
+                item.remove();
+            });
+            item.appendChild(blockBtn);
+
+            return item;
+        }
+
+        // Kokeellinen, EPAVIRALLINEN Kickin kategoriahaku - Kickilla ei ole julkista
+        // kategoriahaku-API:a ilman OAuth-kirjautumista. Cloudflare-bottisuojaus voi estaa
+        // taman kokonaan selaimesta kasin (CORS-virhe) - talloin funktio palauttaa hiljaisesti
+        // tyhjan listan eika riko mitaan muuta. Kentannimet ovat parasta arvausta, koska
+        // tarkkaa vastausskeemaa ei ole varmistettu - kokeillaan useampaa vaihtoehtoista nimea.
+        async function searchKickCategory(query) {
+            try {
+                const searchRes = await fetch(`https://kick.com/api/v1/search?searched_word=${encodeURIComponent(query)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!searchRes.ok) return [];
+                const searchData = await searchRes.json();
+                const categories = searchData.categories || (searchData.data && searchData.data.categories) || [];
+                if (!categories.length) return [];
+                const cat = categories[0];
+                const slug = cat.slug || cat.category_slug || cat.name;
+                if (!slug) return [];
+
+                const catRes = await fetch(`https://kick.com/api/v2/categories/${encodeURIComponent(slug)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!catRes.ok) return [];
+                const catData = await catRes.json();
+                const streams = catData.livestreams || catData.streams || catData.channels || [];
+
+                return streams.map(s => {
+                    const channel = s.channel || s;
+                    const login = channel.slug || channel.channel_slug || s.slug;
+                    if (!login) return null;
+                    const viewerCount = s.viewer_count ?? s.viewers ?? 0;
+                    const title = s.session_title || s.title || '';
+                    const thumb = (s.thumbnail && (s.thumbnail.url || s.thumbnail.src)) || s.thumbnail_url || '';
+                    return { login, viewerCount, title, thumb };
+                }).filter(Boolean);
+            } catch (e) {
+                console.warn('Kick-kategoriahaku epaonnistui (todennakoisesti CORS/Cloudflare-esto):', e.message);
+                return [];
+            }
+        }
+
+        async function searchTwitchCategory(auto = false) {
+            const resultsBox = document.getElementById('categoryResults');
+
+            let query;
+            if (auto) {
+                query = lastCategoryQuery;
+                if (!query) return;
+            } else {
+                query = document.getElementById('categoryInput').value.trim();
+                if (!query) return;
+                addToCategoryHistory(query);
+                lastCategoryQuery = query;
+                resultsBox.textContent = 'Haetaan...';
+            }
+
+            const hasTwitchCreds = !!(twitchCreds.clientId && twitchCreds.token);
+
+            let twitchResults = [];
+            let twitchError = null;
+
+            if (hasTwitchCreds) {
+                try {
+                    const gameRes = await fetch(`https://api.twitch.tv/helix/games?name=${encodeURIComponent(query)}`, {
+                        headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
+                    });
+                    if (!gameRes.ok) throw new Error('Kategoriahaku epaonnistui (HTTP ' + gameRes.status + ')');
+                    const gameData = await gameRes.json();
+                    if (gameData.data && gameData.data.length > 0) {
+                        const gameId = gameData.data[0].id;
+                        const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${gameId}&first=30`, {
+                            headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
+                        });
+                        if (!streamsRes.ok) throw new Error('Striimihaku epaonnistui (HTTP ' + streamsRes.status + ')');
+                        const streamsData = await streamsRes.json();
+
+                        // VAIN Twitch-slotit huomioidaan tassa: sama nimi Kickissa ei saa piilottaa
+                        // eri alustan Twitch-tulosta.
+                        const activeTwitchLogins = slots
+                            .filter(s => s.dataset.plat === 'twitch' && s.dataset.name)
+                            .map(s => s.dataset.name.toLowerCase());
+                        const nowMs = Date.now();
+
+                        twitchResults = (streamsData.data || []).filter(s => {
+                            if (s.viewer_count < 5) return false;
+                            const login = s.user_login.toLowerCase();
+                            if (activeTwitchLogins.includes(login)) return false;
+                            if (blacklist.some(b => b.login === login)) return false;
+                            const startedMs = new Date(s.started_at).getTime();
+                            const hoursLive = (nowMs - startedMs) / (1000 * 60 * 60);
+                            if (hoursLive > uptimeFilterHours) return false;
+                            if (bannedTitleWords.some(w => s.title && s.title.toLowerCase().includes(w.toLowerCase()))) return false;
+                            return true;
+                        });
+                    }
+                } catch (err) {
+                    twitchError = err.message;
+                }
+            }
+
+            // Kick-osuus haetaan aina kun kysely on olemassa, riippumatta Twitch-tunnuksista.
+            const activeKickLogins = slots
+                .filter(s => s.dataset.plat === 'kick' && s.dataset.name)
+                .map(s => s.dataset.name.toLowerCase());
+
+            const kickResultsRaw = await searchKickCategory(query);
+            const kickResults = kickResultsRaw.filter(s => {
+                const login = s.login.toLowerCase();
+                if (activeKickLogins.includes(login)) return false;
+                if (blacklist.some(b => b.login === login)) return false;
+                if (bannedTitleWords.some(w => s.title && s.title.toLowerCase().includes(w.toLowerCase()))) return false;
+                return true;
+            });
+
+            resultsBox.innerHTML = '';
+
+            if (twitchResults.length === 0 && kickResults.length === 0) {
+                if (!auto) {
+                    if (twitchError) {
+                        resultsBox.textContent = 'Twitch-virhe: ' + twitchError + ' (tarkista Client-ID/Token). Kick-tuloksia ei myoskaan loytynyt (kokeellinen haku, ei taattu toimimaan).';
+                    } else if (!hasTwitchCreds) {
+                        resultsBox.textContent = 'Lisaa Twitchin Client-ID ja Access Token nahdaksesi Twitch-tulokset. Kick-tuloksia ei loytynyt (kokeellinen haku, ei taattu toimimaan ilman virallista API:a).';
+                    } else {
+                        resultsBox.textContent = 'Ei suodattimet lapaisevia livena olevia striimeja juuri nyt.';
+                    }
+                }
+                return;
+            }
+
+            const cacheBuster = Date.now();
+
+            twitchResults.forEach(s => {
+                const login = s.user_login.toLowerCase();
+
+                const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45') + `?t=${cacheBuster}`;
+                const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180') + `?t=${cacheBuster}`;
+
+                const preloadImg = new Image();
+                preloadImg.src = bigThumbUrl;
+
+                const item = buildCategoryResultItem({
+                    plat: 'twitch',
+                    login,
+                    displayName: s.user_name,
+                    viewerCount: s.viewer_count,
+                    smallThumbUrl,
+                    bigThumbUrl,
+                    linkUrl: `https://www.twitch.tv/${login}`
+                });
+                resultsBox.appendChild(item);
+            });
+
+            kickResults.forEach(s => {
+                const login = s.login.toLowerCase();
+                const item = buildCategoryResultItem({
+                    plat: 'kick',
+                    login,
+                    displayName: login,
+                    viewerCount: s.viewerCount,
+                    smallThumbUrl: s.thumb,
+                    bigThumbUrl: s.thumb,
+                    linkUrl: `https://kick.com/${login}`
+                });
+                resultsBox.appendChild(item);
+            });
+        }
+
+        async function refreshTwitchLiveStatus(silent = false) {
+            if (!twitchCreds.clientId || !twitchCreds.token) {
+                if (!silent) alert('Lisaa ensin Twitchin Client-ID ja Access Token ylla.');
+                return;
+            }
+            const twitchLogins = savedChannels.filter(c => c.plat === 'twitch').map(c => c.name);
+            if (twitchLogins.length === 0) return;
+
+            const chunks = [];
+            for (let i = 0; i < twitchLogins.length; i += 100) chunks.push(twitchLogins.slice(i, i + 100));
+
+            const liveInfo = new Map();
+            try {
+                for (const chunk of chunks) {
+                    const params = chunk.map(n => `user_login=${encodeURIComponent(n)}`).join('&');
+                    const res = await fetch(`https://api.twitch.tv/helix/streams?first=100&${params}`, {
+                        headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
+                    });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    data.data.forEach(s => liveInfo.set(s.user_login.toLowerCase(), { viewerCount: s.viewer_count, gameName: s.game_name || '' }));
+                }
+                savedChannels.forEach(c => {
+                    if (c.plat === 'twitch') {
+                        const info = liveInfo.get(c.name.toLowerCase());
+                        c.isLive = info !== undefined;
+                        c.viewerCount = info !== undefined ? info.viewerCount : null;
+                        c.gameName = info !== undefined ? info.gameName : null;
+                    }
+                });
+                persistSavedChannels();
+                renderSavedList();
+                checkCategoryEviction();
+                if (autoFillEnabled) runAutoFill();
+            } catch (err) {
+                if (!silent) {
+                    alert('Live-tilan haku epaonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
+                } else {
+                    console.warn('Automaattinen live-tilan paivitys epaonnistui:', err.message);
+                }
+            }
+        }
+
+        // Kokeellinen, EPAVIRALLINEN Kickin live-tilan haku (Kickilla ei ole julkista API:a ilman
+        // OAuth-kirjautumista). Kick kayttaa Cloudflare-bottisuojausta joka voi estaa taman
+        // kokonaan selaimesta kasin (CORS-virhe) - talloin tama epaonnistuu hiljaisesti eika riko
+        // mitaan. Kentannimet (viewer_count/categories) ovat parasta arvausta - kokeillaan useampaa
+        // vaihtoehtoista nimea koska tarkkaa skeemaa ei ole varmistettu.
+        async function refreshKickLiveStatus() {
+            const kickChannels = savedChannels.filter(c => c.plat === 'kick');
+            if (kickChannels.length === 0) return;
+
+            let anyUpdated = false;
+            for (const c of kickChannels) {
+                try {
+                    const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(c.name)}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && 'livestream' in data) {
+                        c.isLive = data.livestream !== null && data.livestream !== undefined;
+                        if (c.isLive) {
+                            const ls = data.livestream;
+                            const vc = (typeof ls.viewer_count === 'number') ? ls.viewer_count
+                                : (typeof ls.viewers === 'number') ? ls.viewers
+                                : (typeof ls.view_count === 'number') ? ls.view_count
+                                : null;
+                            if (vc !== null) c.viewerCount = vc;
+
+                            if (ls.categories && ls.categories[0] && ls.categories[0].name) {
+                                c.gameName = ls.categories[0].name;
+                            } else if (ls.category && ls.category.name) {
+                                c.gameName = ls.category.name;
+                            }
+                        }
+                        anyUpdated = true;
+                    }
+                } catch (e) {
+                    // CORS-esto tms. - jatetaan kanavan tila ennalleen.
+                }
+            }
+            if (anyUpdated) {
+                persistSavedChannels();
+                renderSavedList();
+                checkCategoryEviction();
+                if (autoFillEnabled) runAutoFill();
+            }
+        }
+
+        // ---------- Automaattinen paivitys: kytkin + sekuntilaskuri + vali-liukusaadin ----------
+
+        function updateAutoRefreshUI() {
+            const countdownEl = document.getElementById('autoRefreshCountdown');
+            if (countdownEl) {
+                countdownEl.textContent = autoRefreshEnabled ? (autoRefreshSecondsLeft + ' s') : 'Pois paalta';
+            }
+        }
+
+        function onAutoRefreshToggleChange() {
+            autoRefreshEnabled = document.getElementById('autoRefreshToggle').checked;
+            localStorage.setItem('autoRefreshEnabled', autoRefreshEnabled);
+            if (autoRefreshEnabled) autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
+            updateAutoRefreshUI();
+        }
+
+        function onAutoRefreshIntervalChange() {
+            autoRefreshIntervalSeconds = parseInt(document.getElementById('autoRefreshIntervalSlider').value);
+            localStorage.setItem('autoRefreshIntervalSeconds', autoRefreshIntervalSeconds);
+            updateAutoRefreshIntervalLabel();
+            if (autoRefreshSecondsLeft > autoRefreshIntervalSeconds) {
+                autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
+                updateAutoRefreshUI();
+            }
+        }
+
+        function updateAutoRefreshIntervalLabel() {
+            document.getElementById('autoRefreshIntervalValue').textContent = autoRefreshIntervalSeconds + ' s';
+        }
+
+        async function runAutoRefreshCycle() {
+            if (twitchCreds.clientId && twitchCreds.token) {
+                await refreshTwitchLiveStatus(true);
+            }
+            if (lastCategoryQuery) await searchTwitchCategory(true);
+            await refreshKickLiveStatus();
+            checkDuplicateNames();
+        }
+
+        setInterval(() => {
+            if (!autoRefreshEnabled) return;
+            autoRefreshSecondsLeft--;
+            if (autoRefreshSecondsLeft <= 0) {
+                runAutoRefreshCycle();
+                autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
+            }
+            updateAutoRefreshUI();
+        }, 1000);
+
+        // Modaalin sekuntinaytto (blacklist-merkintojen "lisatty X min" -teksti paivittyy),
+        // sekunnin valein, riippumatta Automaattinen paivitys -kytkimesta. HUOM: itse
+        // blacklist-merkinnat EIVAT koskaan poistu tasta automaattisesti - vain naytetty
+        // ika-teksti lakkaa nakymasta (ks. formatBlacklistAge). Poisto tapahtuu ainoastaan
+        // manuaalisesti X-napista.
+        setInterval(() => {
+            if (document.getElementById('blacklistModal').style.display === 'flex') {
+                renderBlacklistModal();
+            }
+        }, 1000);
+
+        // ---------- Asetusten vienti / tuonti ----------
+
+        function exportSettings() {
+            const data = {
+                version: 7,
+                exportedAt: new Date().toISOString(),
+                myChannels: JSON.parse(localStorage.getItem('myChannels') || '[]'),
+                twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
+                categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]'),
+                blacklist: JSON.parse(localStorage.getItem('blacklist') || '[]'),
+                bannedTitleWords: JSON.parse(localStorage.getItem('bannedTitleWords') || '[]'),
+                uptimeFilterHours: localStorage.getItem('uptimeFilterHours'),
+                autoRefreshIntervalSeconds: localStorage.getItem('autoRefreshIntervalSeconds'),
+                duplicateCheckEnabled: localStorage.getItem('duplicateCheckEnabled'),
+                duplicateNameThreshold: localStorage.getItem('duplicateNameThreshold'),
+                collapsibleStates: JSON.parse(localStorage.getItem('collapsibleStates') || '{}'),
+                gridMode: localStorage.getItem('gridMode'),
+                activeLayout: JSON.parse(localStorage.getItem('activeLayout') || 'null'),
+                visualOrder: JSON.parse(localStorage.getItem('visualOrder') || 'null'),
+                autoRefreshEnabled: localStorage.getItem('autoRefreshEnabled'),
+                autoFillEnabled: localStorage.getItem('autoFillEnabled'),
+                categoryFilterEnabled: localStorage.getItem('categoryFilterEnabled'),
+                boxHeight_active: localStorage.getItem('boxHeight_active'),
+                boxHeight_twitch: localStorage.getItem('boxHeight_twitch'),
+                boxHeight_kick: localStorage.getItem('boxHeight_kick')
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'multistream-theater-asetukset.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function triggerImportFile() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function importSettings(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.myChannels !== undefined) localStorage.setItem('myChannels', JSON.stringify(data.myChannels));
+                    if (data.twitchCreds) localStorage.setItem('twitchCreds', JSON.stringify(data.twitchCreds));
+                    if (data.categoryHistory !== undefined) localStorage.setItem('categoryHistory', JSON.stringify(data.categoryHistory));
+                    if (data.blacklist !== undefined) localStorage.setItem('blacklist', JSON.stringify(data.blacklist));
+                    if (data.bannedTitleWords !== undefined) localStorage.setItem('bannedTitleWords', JSON.stringify(data.bannedTitleWords));
+                    if (data.uptimeFilterHours) localStorage.setItem('uptimeFilterHours', data.uptimeFilterHours);
+                    if (data.autoRefreshIntervalSeconds) localStorage.setItem('autoRefreshIntervalSeconds', data.autoRefreshIntervalSeconds);
+                    if (data.duplicateCheckEnabled !== undefined && data.duplicateCheckEnabled !== null) localStorage.setItem('duplicateCheckEnabled', data.duplicateCheckEnabled);
+                    if (data.duplicateNameThreshold) localStorage.setItem('duplicateNameThreshold', data.duplicateNameThreshold);
+                    if (data.collapsibleStates !== undefined) localStorage.setItem('collapsibleStates', JSON.stringify(data.collapsibleStates));
+                    if (data.gridMode) localStorage.setItem('gridMode', data.gridMode);
+                    if (data.activeLayout) localStorage.setItem('activeLayout', JSON.stringify(data.activeLayout));
+                    if (data.visualOrder) localStorage.setItem('visualOrder', JSON.stringify(data.visualOrder));
+                    if (data.autoRefreshEnabled !== undefined && data.autoRefreshEnabled !== null) localStorage.setItem('autoRefreshEnabled', data.autoRefreshEnabled);
+                    if (data.autoFillEnabled !== undefined && data.autoFillEnabled !== null) localStorage.setItem('autoFillEnabled', data.autoFillEnabled);
+                    if (data.categoryFilterEnabled !== undefined && data.categoryFilterEnabled !== null) localStorage.setItem('categoryFilterEnabled', data.categoryFilterEnabled);
+                    if (data.boxHeight_active) localStorage.setItem('boxHeight_active', data.boxHeight_active);
+                    if (data.boxHeight_twitch) localStorage.setItem('boxHeight_twitch', data.boxHeight_twitch);
+                    if (data.boxHeight_kick) localStorage.setItem('boxHeight_kick', data.boxHeight_kick);
+                    alert('Asetukset tuotu onnistuneesti. Sivu ladataan uudelleen.');
+                    location.reload();
+                } catch (err) {
+                    alert('Tiedoston lukeminen epaonnistui: virheellinen JSON-tiedosto.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // ---------- Kaynnistys ----------
+
+        document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
+        document.getElementById('twitchToken').value = twitchCreds.token || '';
+        document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
+        document.getElementById('autoFillToggle').checked = autoFillEnabled;
+        document.getElementById('categoryFilterToggle').checked = categoryFilterEnabled;
+        document.getElementById('duplicateCheckToggle').checked = duplicateCheckEnabled;
+        document.getElementById('duplicateThresholdSlider').value = duplicateNameThreshold;
+        document.getElementById('uptimeFilterSlider').value = uptimeFilterHours;
+        document.getElementById('autoRefreshIntervalSlider').value = autoRefreshIntervalSeconds;
+        updateUptimeFilterLabel();
+        updateAutoRefreshIntervalLabel();
+        updateDuplicateThresholdLabel();
+        renderCategoryHistory();
+        renderBannedWords();
+        updateAddButtonColor();
+        updateAutoRefreshUI();
+        restoreCollapsibleStates();
+        initSlots();
+        setupResizablePersistence('activeContent', 'boxHeight_active');
+        setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
+        setupResizablePersistence('kickListWrap', 'boxHeight_kick');
+        document.getElementById('blacklistModal').addEventListener('click', (e) => {
+            if (e.target.id === 'blacklistModal') closeBlacklistModal();
+        });
+        if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
+        refreshKickLiveStatus();
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <title>MultiStream Theater Ultimate</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e0e10'/%3E%3Crect x='4' y='4' width='11' height='11' rx='2' fill='%239146ff'/%3E%3Crect x='17' y='4' width='11' height='11' rx='2' fill='%2353fc18'/%3E%3Crect x='4' y='17' width='11' height='11' rx='2' fill='%2353fc18'/%3E%3Crect x='17' y='17' width='11' height='11' rx='2' fill='%239146ff'/%3E%3C/svg%3E">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0e0e10; color: #efeff1; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        .main-layout { display: flex; width: 100vw; height: 100vh; position: relative; }
+
+        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; z-index: 10; transition: margin-left 0.3s; position: relative; }
+        .sidebar.collapsed { margin-left: -320px; }
+        .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: margin-right 0.3s; }
+        .right-sidebar.collapsed { margin-right: -320px; margin-left: 0; }
+
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; padding: 15px; height: 100%; overflow: hidden; box-sizing: border-box; }
+
+        .toggle-btn { position: absolute; right: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-left: none; color: white; cursor: pointer; z-index: 100; }
+        .toggle-btn-right { position: absolute; left: -25px; top: 50%; width: 25px; height: 50px; background: #18181b; border: 2px solid #26262b; border-right: none; color: white; cursor: pointer; z-index: 100; }
+
+        .list-header { font-size: 12px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; gap: 6px; }
+        .collapse-trigger { cursor: pointer; display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+
+        .help-btn { width: 18px; height: 18px; border-radius: 50%; background: #26262b; border: 1px solid #3a3a3d; color: #999; font-size: 11px; font-weight: bold; cursor: help; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; }
+        .help-btn:hover { background: #333; color: #fff; }
+
+        .list-scroll-box { overflow-y: auto; overflow-x: hidden; }
+        .list-scroll-box.resizable { min-height: 150px; height: 150px; flex-shrink: 0; resize: vertical; border: 1px solid #26262b; border-radius: 4px; }
+        .list-scroll-box.grow { flex: 1 1 auto; min-height: 50px; }
+
+        .btn-group { display: flex; gap: 5px; flex-shrink: 0; }
+        .btn-sm { flex: 1; padding: 8px; background: #26262b; color: white; border: 1px solid #3a3a3d; cursor: pointer; border-radius: 4px; }
+        .btn-sm.active { background: #53fc18; color: #000; font-weight: bold; }
+        .btn-sm.sort-active { background: #9146ff; color: #fff; font-weight: bold; }
+        .btn-danger { background: #eb0400; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+        .btn-mute { background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+        .manual-add-box { background-color: #1f1f23; padding: 10px; border-radius: 6px; border: 1px solid #26262b; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        input, select, button { background: #1f1f23; color: #fff; border: 1px solid #3a3a3d; padding: 8px; border-radius: 4px; font-family: inherit; }
+        .btn-add { color: #000; font-weight: bold; cursor: pointer; border: none; }
+        .btn-twitch { background: #9146ff; color: #fff; }
+        .btn-kick { background: #53fc18; color: #000; }
+        .hint-link { font-size: 11px; color: #888; text-decoration: none; }
+        .hint-link:hover { color: #9146ff; }
+        .hint-text { font-size: 11px; color: #666; line-height: 1.4; flex-shrink: 0; }
+
+        .history-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .history-chip { display: flex; align-items: center; background: #26262b; border: 1px solid #3a3a3d; border-radius: 12px; overflow: hidden; }
+        .history-chip-label { background: transparent; border: none; color: #ccc; font-size: 11px; padding: 3px 6px; cursor: pointer; border-radius: 0; }
+        .history-chip-label:hover { color: #fff; }
+        .history-chip-remove { background: transparent; border: none; color: #888; font-size: 13px; line-height: 1; padding: 3px 7px 3px 3px; cursor: pointer; border-radius: 0; }
+        .history-chip-remove:hover { color: #eb0400; }
+        .category-toggle-dot { width: 9px; height: 9px; border-radius: 50%; background: #555; border: none; padding: 0; margin-left: 8px; cursor: pointer; flex-shrink: 0; }
+        .category-toggle-dot.on { background: #53fc18; box-shadow: 0 0 4px #53fc18; }
+        .suggestion-chip { background: #26262b; border: 1px solid #3a3a3d; color: #ccc; font-size: 12px; padding: 4px 10px; border-radius: 12px; cursor: pointer; }
+        .suggestion-chip:hover { background: #333; color: #fff; border-color: #9146ff; }
+
+        .auto-refresh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+        .auto-refresh-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #ccc; cursor: pointer; }
+        .auto-refresh-toggle input { display: none; }
+        .toggle-slider { width: 32px; height: 17px; background: #3a3a3d; border-radius: 999px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+        .toggle-slider::before { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
+        .auto-refresh-toggle input:checked + .toggle-slider { background: #9146ff; }
+        .auto-refresh-toggle input:checked + .toggle-slider::before { transform: translateX(15px); }
+        #autoRefreshCountdown { white-space: nowrap; }
+
+        .slider-row { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+        .slider-row-label { display: flex; justify-content: space-between; font-size: 11px; color: #ccc; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: #3a3a3d; border-radius: 2px; padding: 0; border: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #9146ff; cursor: pointer; }
+        input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #9146ff; cursor: pointer; border: none; }
+
+        .platform-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 9px; font-weight: bold; flex-shrink: 0; line-height: 1; }
+        .platform-badge.platform-twitch { background: #9146ff; color: #fff; }
+        .platform-badge.platform-kick { background: #53fc18; color: #000; }
+
+        .saved-channel { background: #26262b; padding: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
+        .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
+        .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
+        .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; cursor: pointer; }
+        .block-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+
+        #thumbPreview { position: fixed; right: 330px; width: 320px; height: 180px; border: 2px solid #9146ff; border-radius: 6px; overflow: hidden; z-index: 999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; background: #000; }
+        #thumbPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
+        .modal-box { background: #18181b; border: 1px solid #26262b; border-radius: 8px; width: 380px; height: 560px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #26262b; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+        .modal-close-btn { background: transparent; border: none; color: #999; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
+        .modal-close-btn:hover { color: #fff; }
+        .modal-toolbar { padding: 10px 16px 0; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .modal-sort-row { display: flex; gap: 6px; }
+        .modal-body { padding: 12px 16px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+
+        .list-item { background: #26262b; padding: 6px; margin-bottom: 3px; font-size: 13px; border-radius: 3px; }
+
+        .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #555; }
+        .status-dot.live { background: #53fc18; box-shadow: 0 0 4px #53fc18; }
+        .status-dot.offline { background: #eb0400; }
+        .status-dot.unknown { background: #444; border: 1px solid #666; }
+        .status-dot.category-mismatch { background: #f3c611; box-shadow: 0 0 4px #f3c611; }
+
+        .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
+        .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .stream-slot.active { border: 2px solid #26262b; }
+        .slot-controls { position: absolute; top: 5px; left: 5px; z-index: 20; display: none; gap: 5px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; align-items: center; }
+        .stream-slot:hover .slot-controls { display: flex; }
+        .drag-handle { background: #333; padding: 2px 8px; cursor: grab; color: white; border-radius: 4px; user-select: none; }
+        .close-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+        .heart-btn { background: transparent; border: none; color: #999; font-size: 16px; cursor: pointer; padding: 0 6px; line-height: 1; }
+        .heart-btn.favorited { color: #eb0400; }
+
+        .stream-wrapper { width: 100%; height: 100%; display: flex; position: relative; }
+        .stream-label { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.8); padding: 4px 8px; color: #53fc18; font-weight: bold; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; gap: 4px; }
+        .stream-slot:hover .stream-label { opacity: 1; }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        body.dragging-active iframe { pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="thumbPreview"><img src="" alt=""></div>
+
+    <div id="blacklistModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>Mustalla listalla olevat kanavat (<span id="blacklistCount">0</span>)</span>
+                <button class="modal-close-btn" onclick="closeBlacklistModal()">×</button>
+            </div>
+            <div class="modal-toolbar">
+                <input type="text" id="blacklistSearchInput" placeholder="Suodata nimellä..." autocomplete="off" oninput="renderBlacklistModal()">
+                <div class="modal-sort-row">
+                    <button class="btn-sm" id="sortBtnAlpha" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('alpha')">A-Ö</button>
+                    <button class="btn-sm" id="sortBtnNewest" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('newest')">Uusin</button>
+                    <button class="btn-sm" id="sortBtnOldest" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('oldest')">Vanhin</button>
+                </div>
+            </div>
+            <div id="blacklistList" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar" id="sidebar">
+            <button class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()">◀</button>
+            <div class="sidebar-content">
+                <div class="btn-group">
+                    <button id="btn-1" class="btn-sm" onclick="changeGridMode(1)">1x1</button>
+                    <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
+                    <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
+                </div>
+                <div style="display: flex; gap: 5px; flex-shrink: 0;">
+                    <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
+                    <button class="btn-sm" style="flex: 1; background:#3a3a3d;" onclick="openBlacklistModal()">Blacklist</button>
+                    <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
+                </div>
+                <div class="manual-add-box">
+                    <div style="display: flex; gap: 6px;">
+                        <select id="platform" onchange="updateAddButtonColor(); updateChannelSuggestions();" style="flex:none; width:auto;">
+                            <option value="kick">Kick</option>
+                            <option value="twitch">Twitch</option>
+                        </select>
+                        <input type="text" id="channelInput" placeholder="Nimi..." autocomplete="off" style="flex:1; min-width:0;" oninput="updateChannelSuggestions()" onkeydown="if(event.key === 'Enter') { event.preventDefault(); processNewChannel(); }">
+                        <button class="btn-add btn-kick" id="addChannelBtn" onclick="processNewChannel()" style="flex:none; padding:8px 14px;">Lisää</button>
+                    </div>
+                    <div id="channelSuggestions" class="history-list"></div>
+                </div>
+
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></span></div>
+                <div id="activeContent" class="list-scroll-box resizable"><div id="activeList"></div></div>
+
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleCollapsible('twitchListWrap','twitchToggleIcon')">Tallennetut kanavat - Twitch <span id="twitchToggleIcon">▼</span></span></div>
+                <div id="twitchListWrap" class="list-scroll-box resizable"><div id="channelListTwitch"></div></div>
+
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleCollapsible('kickListWrap','kickToggleIcon')">Tallennetut kanavat - Kick <span id="kickToggleIcon">▼</span></span></div>
+                <div id="kickListWrap" class="list-scroll-box resizable"><div id="channelListKick"></div></div>
+            </div>
+        </div>
+
+        <div class="grid-container" id="streamGrid"></div>
+
+        <div class="sidebar right-sidebar" id="rightSidebar">
+            <button class="toggle-btn-right" id="toggleBtnRight" onclick="toggleRightSidebar()">▶</button>
+            <div class="sidebar-content">
+
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('twitchCredsBody','twitchCredsIcon')">Twitch-tunnukset <span id="twitchCredsIcon">▼</span></span>
+                </div>
+                <div id="twitchCredsBody">
+                    <div class="manual-add-box">
+                        <input type="password" id="twitchClientId" placeholder="Client-ID" autocomplete="off">
+                        <input type="password" id="twitchToken" placeholder="Access Token" autocomplete="off">
+                        <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                        <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
+                    </div>
+                </div>
+
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat <span id="liveStatusIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.">?</button>
+                    <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
+                </div>
+                <div id="liveStatusBody">
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="autoRefreshToggle" checked onchange="onAutoRefreshToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Automaattinen päivitys</span>
+                        </label>
+                        <span id="autoRefreshCountdown" class="hint-text"></span>
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-row-label">
+                            <span>Päivitysväli</span>
+                            <span id="autoRefreshIntervalValue">120 s</span>
+                        </div>
+                        <input type="range" id="autoRefreshIntervalSlider" min="10" max="600" value="120" oninput="onAutoRefreshIntervalChange()">
+                    </div>
+
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="autoFillToggle" onchange="onAutoFillToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Täytä paikat automaattisesti</span>
+                        </label>
+                    </div>
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="categoryFilterToggle" onchange="onCategoryFilterToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Suosi vain haettuja kategorioita</span>
+                        </label>
+                    </div>
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="duplicateCheckToggle" onchange="onDuplicateCheckToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Sulje samankaltaiset Kick-kaksoiskappaleet</span>
+                        </label>
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-row-label">
+                            <span>Nimien samankaltaisuuden kynnys</span>
+                            <span id="duplicateThresholdValue">80%</span>
+                        </div>
+                        <input type="range" id="duplicateThresholdSlider" min="50" max="100" value="80" oninput="onDuplicateThresholdChange()">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-row-label">
+                            <span>Max. lähetysaika (kategoriahaku)</span>
+                            <span id="uptimeFilterValue">30 h</span>
+                        </div>
+                        <input type="range" id="uptimeFilterSlider" min="6" max="30" value="30" oninput="onUptimeFilterChange()">
+                    </div>
+
+                    <div class="manual-add-box" style="padding:0; background:none; border:none;">
+                        <button class="btn-sm" onclick="promptBannedWord()">Suodata otsikosta</button>
+                        <div class="history-list" id="bannedWordsList"></div>
+                    </div>
+                </div>
+
+                <div class="list-header">
+                    <span class="collapse-trigger" onclick="toggleCollapsible('backupBody','backupIcon')">Asetusten varmuuskopiointi <span id="backupIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Sisältää mm. tallennetut kanavat ja Twitch-tunnukset selkokielisenä tiedostossa — säilytä tiedostoa varovasti äläkä jaa sitä muille.">?</button>
+                </div>
+                <div id="backupBody">
+                    <div class="manual-add-box">
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-sm" style="flex:1;" onclick="exportSettings()">Vie asetukset</button>
+                            <button class="btn-sm" style="flex:1;" onclick="triggerImportFile()">Tuo asetukset</button>
+                        </div>
+                        <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importSettings(event)">
+                    </div>
+                </div>
+
+                <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch) <span id="categorySearchIcon">▼</span></span>
                     <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Vain Twitch: Kickillä ei ole julkista kategoriahakua ilman OAuth-kirjautumista.">?</button>
                 </div>
