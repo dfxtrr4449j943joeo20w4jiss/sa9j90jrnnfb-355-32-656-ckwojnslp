@@ -233,6 +233,14 @@
                     </div>
                     <div class="auto-refresh-row">
                         <label class="auto-refresh-toggle">
+                            <input type="checkbox" id="gridOvershootToggle" onchange="onGridOvershootToggleChange()">
+                            <span class="toggle-slider"></span>
+                            <span>Salli ruudukon koon ylitäyttö</span>
+                        </label>
+                        <button type="button" class="help-btn" title="Vaatii Täytä paikat automaattisesti -asetuksen päällä. Jos tallennettuja, oikeassa kategoriassa livenä olevia kanavia on tarpeeksi täyttämään seuraava isompi ruudukkokoko kokonaan, vaihtaa ruudukon automaattisesti isommaksi ja täyttää uudet paikat. Pienentää ruudukon myös automaattisesti takaisin, jos livenä olevien kanavien määrä myöhemmin tippuu.">?</button>
+                    </div>
+                    <div class="auto-refresh-row">
+                        <label class="auto-refresh-toggle">
                             <input type="checkbox" id="categoryFilterToggle" onchange="onCategoryFilterToggleChange()">
                             <span class="toggle-slider"></span>
                             <span>Suosi vain haettuja kategorioita</span>
@@ -301,8 +309,8 @@
                 </div>
 
                 <div class="list-header">
-                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch + Kick) <span id="categorySearchIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Näyttää sekä Twitch- että Kick-tulokset samassa listassa. Kick-haku on KOKEELLINEN ja EPÄVIRALLINEN (ei julkista kategoria-API:a ilman OAuth-kirjautumista) — Cloudflare voi estää sen kokonaan selaimesta käsin, jolloin vain Twitch-tulokset näkyvät eikä mikään muu hajoa.">?</button>
+                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch) <span id="categorySearchIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Vain Twitch: Kickillä ei ole julkista kategoriahakua ilman OAuth-kirjautumista, ja sen oma rajapinta on lisäksi CORS-lukittu vain kick.com-sivulle itselleen, joten sitä ei voi kutsua tästä työkalusta.">?</button>
                 </div>
                 <div id="categorySearchBody">
                     <div class="manual-add-box">
@@ -428,6 +436,11 @@
             const storedCF = localStorage.getItem('categoryFilterEnabled');
             categoryFilterEnabled = storedCF === null ? true : storedCF === 'true';
         } catch (e) { categoryFilterEnabled = true; }
+
+        let allowGridOvershoot = false;
+        try {
+            allowGridOvershoot = localStorage.getItem('allowGridOvershoot') === 'true';
+        } catch (e) { allowGridOvershoot = false; }
 
         let forceQualityEnabled = false;
         try {
@@ -1297,6 +1310,22 @@
 
         // ---------- Kanavien lisays / poisto ----------
 
+        // Etsii ensimmaisen VAPAAN paikan nykyisen ruudukkokoon NAKYVISTA paikoista
+        // (visuaalisessa jarjestyksessa) - ei koskaan piilossa olevista taustapaikoista.
+        // Tama "lukitsee" manuaaliset lisaykset nykyiseen ruudukkokokoon: jos esim. 3x3
+        // on valittuna ja kaikki 9 nakyvaa paikkaa ovat taynna, lisays ei enaa mene
+        // piiloon 10. paikkaan asti - kayttajan pitaa vaihtaa isompaan ruudukkoon tai
+        // vapauttaa paikka. Automaattinen taytto/ylitaytto kayttaa omaa, erillista
+        // logiikkaansa (runAutoFill/evaluateGridOvershoot) eika tama vaikuta siihen.
+        function getFirstFreeVisibleSlotIndex() {
+            const visibleCount = gridMode * gridMode;
+            for (let vp = 0; vp < visibleCount; vp++) {
+                const physicalIdx = visualOrder[vp];
+                if (!slots[physicalIdx].classList.contains('active')) return physicalIdx;
+            }
+            return -1;
+        }
+
         function processNewChannel() {
             const input = document.getElementById('channelInput');
             const name = input.value.trim().toLowerCase();
@@ -1306,45 +1335,37 @@
                 savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
                 persistSavedChannels();
             }
-            let loaded = false;
-            for (let i = 0; i < slots.length; i++) {
-                if (!slots[i].classList.contains('active')) {
-                    loadStreamIntoSlot(i, name, plat);
-                    saveLayout();
-                    loaded = true;
-                    break;
-                }
-            }
-            if (loaded) {
+            const freeIdx = getFirstFreeVisibleSlotIndex();
+            if (freeIdx !== -1) {
+                loadStreamIntoSlot(freeIdx, name, plat);
+                saveLayout();
                 input.value = "";
                 document.getElementById('channelSuggestions').innerHTML = '';
             } else {
                 renderSavedList();
-                alert('Kaikki paikat ovat kaytossa. Kanava tallennettiin listaan, mutta sita ei ladattu playeriin. Vapauta jokin paikka ensin.');
+                alert(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat kaytossa. Kanava tallennettiin listaan, mutta sita ei ladattu playeriin. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             }
         }
 
         function processNewChannelManual(name, plat) {
-            for (let i = 0; i < slots.length; i++) {
-                if (!slots[i].classList.contains('active')) {
-                    loadStreamIntoSlot(i, name, plat);
-                    saveLayout();
-                    return true;
-                }
+            const freeIdx = getFirstFreeVisibleSlotIndex();
+            if (freeIdx !== -1) {
+                loadStreamIntoSlot(freeIdx, name, plat);
+                saveLayout();
+                return true;
             }
-            alert('Kaikki paikat ovat kaytossa. Vapauta jokin paikka ensin.');
+            alert(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat kaytossa. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             return false;
         }
 
         function loadFromCategorySearch(name, plat) {
-            for (let i = 0; i < slots.length; i++) {
-                if (!slots[i].classList.contains('active')) {
-                    loadStreamIntoSlot(i, name, plat);
-                    saveLayout();
-                    return true;
-                }
+            const freeIdx = getFirstFreeVisibleSlotIndex();
+            if (freeIdx !== -1) {
+                loadStreamIntoSlot(freeIdx, name, plat);
+                saveLayout();
+                return true;
             }
-            alert('Kaikki paikat ovat kaytossa. Vapauta jokin paikka ensin.');
+            alert(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat kaytossa. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             return false;
         }
 
@@ -1460,6 +1481,43 @@
         function onCategoryFilterToggleChange() {
             categoryFilterEnabled = document.getElementById('categoryFilterToggle').checked;
             localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
+        }
+
+        function onGridOvershootToggleChange() {
+            allowGridOvershoot = document.getElementById('gridOvershootToggle').checked;
+            localStorage.setItem('allowGridOvershoot', allowGridOvershoot);
+            if (allowGridOvershoot) evaluateGridOvershoot();
+        }
+
+        // Laskee kuinka monta tallennettua kanavaa on juuri nyt livena ja tayttaisi
+        // kategoriasuodattimen (jos kaytossa) - riippumatta siita ovatko ne jo auki
+        // vai eivat. Tama luku maarittaa "Salli ruudukon koon ylitaytto" -toiminnon
+        // kohdekoon: valitaan suurin ruudukko jonka tama maara riittaisi tayttamaan
+        // kokonaan.
+        function countAvailableLiveCandidates() {
+            const enabledCategories = getEnabledCategoryNames();
+            return savedChannels.filter(c => {
+                if (c.isLive !== true) return false;
+                if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
+                if (categoryFilterEnabled && enabledCategories.length > 0) {
+                    const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
+                    if (!matches) return false;
+                }
+                return true;
+            }).length;
+        }
+
+        function evaluateGridOvershoot() {
+            if (!autoFillEnabled || !allowGridOvershoot) return;
+            const availableCount = countAvailableLiveCandidates();
+            let bestSize = VALID_GRID_MODES[0];
+            VALID_GRID_MODES.forEach(size => {
+                if (availableCount >= size * size) bestSize = size;
+            });
+            if (bestSize !== gridMode) {
+                changeGridMode(bestSize);
+                runAutoFill();
+            }
         }
 
         // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan paivitys ----------
@@ -1591,124 +1649,6 @@
             return item;
         }
 
-        // ---------- Kick-kategoriahaku (kokeellinen, useampi vaihtoehtoinen reitti) ----------
-        // Kickilla ei ole virallista julkista kategoria-API:a ilman OAuth-kirjautumista, joten
-        // tassa kokeillaan kolmea tunnettua epavirallista reittia jarjestyksessa - ensimmainen
-        // joka tuottaa tuloksia, kaytetaan. Jos KAIKKI reitit epaonnistuvat (esim. Cloudflare
-        // estaa CORS:n kokonaan selaimesta kasin), palautetaan hiljaisesti tyhja lista eika
-        // mikaan muu hajoa - vain Twitch-tulokset nakyvat silloin.
-        //
-        // HUOM: en pysty testaamaan naita paatepisteita elavan verkkoyhteyden kautta talla
-        // hetkella, joten toimivuutta EI ole vahvistettu. Jos haluat varmemman ratkaisun: avaa
-        // selaimen Kehittajan tyokalut (F12) -> Network-valilehti, selaa esim.
-        // kick.com/category/vrchat -sivua ja katso mita JSON-osoitetta sivu itse kutsuu
-        // striimien hakemiseen - laheta se osoite niin liitan sen suoraan tahan koodiin.
-
-        async function searchKickCategory(query) {
-            const slugGuess = query.trim().toLowerCase().replace(/\s+/g, '-');
-
-            // Reitti 1: haku + v2-kategoriapaatepiste
-            try {
-                const searchRes = await fetch(`https://kick.com/api/v1/search?searched_word=${encodeURIComponent(query)}`, {
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (searchRes.ok) {
-                    const searchData = await searchRes.json();
-                    const categories = searchData.categories || (searchData.data && searchData.data.categories) || [];
-                    if (categories.length) {
-                        const cat = categories[0];
-                        const slug = cat.slug || cat.category_slug || cat.name;
-                        if (slug) {
-                            const streams = await tryKickCategoryEndpoint(`https://kick.com/api/v2/categories/${encodeURIComponent(slug)}`);
-                            if (streams.length) return streams;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('Kick-kategoriahaku (reitti 1) epaonnistui:', e.message);
-            }
-
-            // Reitti 2: suora v1-kategoriapaatepiste arvatulla slugilla
-            try {
-                const streams = await tryKickCategoryEndpoint(`https://kick.com/api/v1/categories/${encodeURIComponent(slugGuess)}`);
-                if (streams.length) return streams;
-            } catch (e) {
-                console.warn('Kick-kategoriahaku (reitti 2) epaonnistui:', e.message);
-            }
-
-            // Reitti 3: haetaan kategoriasivun HTML ja poimitaan siihen upotettu JSON-data
-            // (usein __NEXT_DATA__ -script-tagi Next.js-pohjaisilla sivustoilla).
-            try {
-                const pageRes = await fetch(`https://kick.com/categories/${encodeURIComponent(slugGuess)}`, {
-                    headers: { 'Accept': 'text/html' }
-                });
-                if (pageRes.ok) {
-                    const html = await pageRes.text();
-                    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-                    if (match) {
-                        const nextData = JSON.parse(match[1]);
-                        const found = deepFindStreamArray(nextData);
-                        if (found && found.length) {
-                            const streams = normalizeKickStreamList(found);
-                            if (streams.length) return streams;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('Kick-kategoriahaku (reitti 3) epaonnistui:', e.message);
-            }
-
-            return [];
-        }
-
-        async function tryKickCategoryEndpoint(url) {
-            try {
-                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-                if (!res.ok) return [];
-                const data = await res.json();
-                const streams = data.livestreams || data.streams || data.channels || [];
-                return normalizeKickStreamList(streams);
-            } catch (e) {
-                return [];
-            }
-        }
-
-        function normalizeKickStreamList(streams) {
-            return streams.map(s => {
-                const channel = s.channel || s;
-                const login = channel.slug || channel.channel_slug || s.slug;
-                if (!login) return null;
-                const viewerCount = s.viewer_count ?? s.viewers ?? 0;
-                const title = s.session_title || s.title || '';
-                const thumb = (s.thumbnail && (s.thumbnail.url || s.thumbnail.src)) || s.thumbnail_url || '';
-                return { login, viewerCount, title, thumb };
-            }).filter(Boolean);
-        }
-
-        // Etsii rekursiivisesti ensimmaisen taulukon jonka alkiot nayttavat striimeilta
-        // (sisaltavat esim. viewer_count- tai channel-kentan). Kaytetaan __NEXT_DATA__
-        // -JSON-dumpin lapikayntiin, koska tarkkaa polkua rakenteessa ei tiedeta etukateen.
-        function deepFindStreamArray(node, depth = 0) {
-            if (depth > 6 || !node || typeof node !== 'object') return null;
-            if (Array.isArray(node)) {
-                const looksLikeStreams = node.length > 0 && node.every(item =>
-                    item && typeof item === 'object' &&
-                    ('viewer_count' in item || 'viewers' in item || 'channel' in item || 'slug' in item)
-                );
-                if (looksLikeStreams) return node;
-                for (const item of node) {
-                    const found = deepFindStreamArray(item, depth + 1);
-                    if (found) return found;
-                }
-                return null;
-            }
-            for (const key of Object.keys(node)) {
-                const found = deepFindStreamArray(node[key], depth + 1);
-                if (found) return found;
-            }
-            return null;
-        }
-
         async function searchTwitchCategory(auto = false) {
             const resultsBox = document.getElementById('categoryResults');
 
@@ -1768,28 +1708,14 @@
                 }
             }
 
-            // Kick-osuus haetaan aina kun kysely on olemassa, riippumatta Twitch-tunnuksista.
-            const activeKickLogins = slots
-                .filter(s => s.dataset.plat === 'kick' && s.dataset.name)
-                .map(s => s.dataset.name.toLowerCase());
-
-            const kickResultsRaw = await searchKickCategory(query);
-            const kickResults = kickResultsRaw.filter(s => {
-                const login = s.login.toLowerCase();
-                if (activeKickLogins.includes(login)) return false;
-                if (blacklist.some(b => b.login === login)) return false;
-                if (bannedTitleWords.some(w => s.title && s.title.toLowerCase().includes(w.toLowerCase()))) return false;
-                return true;
-            });
-
             resultsBox.innerHTML = '';
 
-            if (twitchResults.length === 0 && kickResults.length === 0) {
+            if (twitchResults.length === 0) {
                 if (!auto) {
                     if (twitchError) {
-                        resultsBox.textContent = 'Twitch-virhe: ' + twitchError + ' (tarkista Client-ID/Token). Kick-tuloksia ei myoskaan loytynyt (kokeellinen haku, ei taattu toimimaan).';
+                        resultsBox.textContent = 'Virhe: ' + twitchError + ' (tarkista Client-ID/Token).';
                     } else if (!hasTwitchCreds) {
-                        resultsBox.textContent = 'Lisaa Twitchin Client-ID ja Access Token nahdaksesi Twitch-tulokset. Kick-tuloksia ei loytynyt (kokeellinen haku, ei taattu toimimaan ilman virallista API:a).';
+                        resultsBox.textContent = 'Lisaa ensin Twitchin Client-ID ja Access Token ylapuolelle.';
                     } else {
                         resultsBox.textContent = 'Ei suodattimet lapaisevia livena olevia striimeja juuri nyt.';
                     }
@@ -1816,20 +1742,6 @@
                     smallThumbUrl,
                     bigThumbUrl,
                     linkUrl: `https://www.twitch.tv/${login}`
-                });
-                resultsBox.appendChild(item);
-            });
-
-            kickResults.forEach(s => {
-                const login = s.login.toLowerCase();
-                const item = buildCategoryResultItem({
-                    plat: 'kick',
-                    login,
-                    displayName: login,
-                    viewerCount: s.viewerCount,
-                    smallThumbUrl: s.thumb,
-                    bigThumbUrl: s.thumb,
-                    linkUrl: `https://kick.com/${login}`
                 });
                 resultsBox.appendChild(item);
             });
@@ -1869,6 +1781,7 @@
                 renderSavedList();
                 checkCategoryEviction();
                 if (autoFillEnabled) runAutoFill();
+                evaluateGridOvershoot();
             } catch (err) {
                 if (!silent) {
                     alert('Live-tilan haku epaonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
@@ -1922,6 +1835,7 @@
                 renderSavedList();
                 checkCategoryEviction();
                 if (autoFillEnabled) runAutoFill();
+                evaluateGridOvershoot();
             }
         }
 
@@ -1958,8 +1872,8 @@
         async function runAutoRefreshCycle() {
             if (twitchCreds.clientId && twitchCreds.token) {
                 await refreshTwitchLiveStatus(true);
+                if (lastCategoryQuery) await searchTwitchCategory(true);
             }
-            if (lastCategoryQuery) await searchTwitchCategory(true);
             await refreshKickLiveStatus();
             checkDuplicateNames();
         }
@@ -2007,6 +1921,7 @@
                 autoRefreshEnabled: localStorage.getItem('autoRefreshEnabled'),
                 autoFillEnabled: localStorage.getItem('autoFillEnabled'),
                 categoryFilterEnabled: localStorage.getItem('categoryFilterEnabled'),
+                allowGridOvershoot: localStorage.getItem('allowGridOvershoot'),
                 forceQualityEnabled: localStorage.getItem('forceQualityEnabled'),
                 forceQualityLevel: localStorage.getItem('forceQualityLevel'),
                 boxHeight_active: localStorage.getItem('boxHeight_active'),
@@ -2051,6 +1966,7 @@
                     if (data.autoRefreshEnabled !== undefined && data.autoRefreshEnabled !== null) localStorage.setItem('autoRefreshEnabled', data.autoRefreshEnabled);
                     if (data.autoFillEnabled !== undefined && data.autoFillEnabled !== null) localStorage.setItem('autoFillEnabled', data.autoFillEnabled);
                     if (data.categoryFilterEnabled !== undefined && data.categoryFilterEnabled !== null) localStorage.setItem('categoryFilterEnabled', data.categoryFilterEnabled);
+                    if (data.allowGridOvershoot !== undefined && data.allowGridOvershoot !== null) localStorage.setItem('allowGridOvershoot', data.allowGridOvershoot);
                     if (data.forceQualityEnabled !== undefined && data.forceQualityEnabled !== null) localStorage.setItem('forceQualityEnabled', data.forceQualityEnabled);
                     if (data.forceQualityLevel) localStorage.setItem('forceQualityLevel', data.forceQualityLevel);
                     if (data.boxHeight_active) localStorage.setItem('boxHeight_active', data.boxHeight_active);
@@ -2079,6 +1995,7 @@
         document.getElementById('autoRefreshIntervalSlider').value = autoRefreshIntervalSeconds;
         document.getElementById('forceQualityToggle').checked = forceQualityEnabled;
         document.getElementById('forceQualitySelect').value = forceQualityLevel;
+        document.getElementById('gridOvershootToggle').checked = allowGridOvershoot;
         updateUptimeFilterLabel();
         updateAutoRefreshIntervalLabel();
         updateDuplicateThresholdLabel();
