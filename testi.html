@@ -216,6 +216,7 @@
                     <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat <span id="liveStatusIcon">▼</span></span>
                     <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Täytä paikat automaattisesti: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla. Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Salli ruudukon koon ylitäyttö: vaatii Täytä paikat automaattisesti päällä. Jos tallennettuja, oikeassa kategoriassa livenä olevia kanavia on tarpeeksi täyttämään seuraava isompi ruudukkokoko kokonaan, vaihtaa ruudukon automaattisesti isommaksi ja täyttää uudet paikat (ohittaen 30 min jäähyn juuri kasvatetulle ruudukolle). Pienentää ruudukon myös automaattisesti takaisin, jos livenä olevien kanavien määrä myöhemmin tippuu.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Arvo täytettävä striimi: kun päällä, tyhjään paikkaan valittava kanava arvotaan (jokaiselle ehdokkaalle satunnaisluku 1-yläraja, suurin voittaa, tasapelissä arvotaan uudelleen) sen sijaan että aina eniten katsojia omaava voittaisi suoraan - antaa pienemmillekin kanaville mahdollisuuden.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.&#10;&#10;Laatuprofiilin pakotus pienille ruuduille: pakottaa Twitch-striimit valittuun laatuun (ei koske Kickiä). Jos valittu laatu ei ole saatavilla, käytetään lähintä ylempää, viimeisenä keinona Sourcea. Suositellaan päälle 4x4/5x5-ruudukoissa.&#10;&#10;Tilastot-nappi: näyttää katseluaikatilastot per kanava, alustoittain ja Twitch-kategorioittain.">?</button>
                     <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px; background:#3a3a3d;" onclick="openStatsModal()">Tilastot</button>
+                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px; background:#3a3a3d;" onclick="resetWatchStats()">Reset</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
                 <div id="liveStatusBody">
@@ -496,6 +497,11 @@
         } catch (e) { categoryWatchStats = {}; }
 
         let activeWatchSessions = {};
+        // Kaikki tallaisella hetkella jossain paikassa auki olevat kanavat, riippumatta
+        // siita onko sivu fokusoituna vai ei - kaytetaan focus/blur-tapahtumissa
+        // paivittamaan activeWatchSessions oikein.
+        let currentlyPlayingKeys = new Set();
+        let pageIsFocused = !document.hidden && document.hasFocus();
 
         let forceQualityEnabled = false;
         try {
@@ -760,7 +766,8 @@
 
         function startWatchSession(plat, name) {
             const key = plat + ':' + name.toLowerCase();
-            if (!activeWatchSessions[key]) activeWatchSessions[key] = Date.now();
+            currentlyPlayingKeys.add(key);
+            if (pageIsFocused && !activeWatchSessions[key]) activeWatchSessions[key] = Date.now();
         }
 
         // Kirjaa kuluneen ajan istunnon alusta (tai edellisesta tarkistuspisteesta) talteen ja
@@ -788,10 +795,48 @@
             const key = plat + ':' + name.toLowerCase();
             flushWatchSession(key);
             delete activeWatchSessions[key];
+            currentlyPlayingKeys.delete(key);
         }
 
         function flushAllActiveSessions() {
             Object.keys(activeWatchSessions).forEach(key => flushWatchSession(key));
+        }
+
+        // Sivu ei ole nakyvissa/fokusoituna: kirjataan kertynyt aika talteen ja pysaytetaan
+        // laskenta (tyhjennetaan tarkistuspisteet) - piilossa vietetty aika ei siis lasketa
+        // katseluajaksi.
+        function pauseAllWatchSessions() {
+            flushAllActiveSessions();
+            activeWatchSessions = {};
+            pageIsFocused = false;
+        }
+
+        // Sivu on taas nakyvissa/fokusoituna: asetetaan uusi tarkistuspiste kaikille
+        // parhaillaan auki oleville kanaville, jotta laskenta jatkuu tasta hetkesta.
+        function resumeAllWatchSessions() {
+            pageIsFocused = true;
+            currentlyPlayingKeys.forEach(key => {
+                activeWatchSessions[key] = Date.now();
+            });
+        }
+
+        function resetWatchStats() {
+            const val = prompt('Tama poistaa KAIKKI katselutilastot pysyvasti. Kirjoita "reset" ja paina OK vahvistaaksesi.');
+            if (val === null) return;
+            if (val.trim().toLowerCase() !== 'reset') {
+                showToast('Nollaus peruttu - kirjoitettu teksti ei tasmannyt.');
+                return;
+            }
+            watchStats = {};
+            categoryWatchStats = {};
+            activeWatchSessions = {};
+            if (pageIsFocused) {
+                currentlyPlayingKeys.forEach(key => { activeWatchSessions[key] = Date.now(); });
+            }
+            persistWatchStats();
+            persistCategoryWatchStats();
+            if (document.getElementById('statsModal').style.display === 'flex') renderStatsModal();
+            showToast('Katselutilastot nollattu.');
         }
 
         // ---------- Blacklist ----------
@@ -940,16 +985,30 @@
             const twitchSeconds = entries.filter(e => e.plat === 'twitch').reduce((sum, e) => sum + e.seconds, 0);
             const kickSeconds = entries.filter(e => e.plat === 'kick').reduce((sum, e) => sum + e.seconds, 0);
 
-            // --- Yhteensa-osio ---
+            // --- Yhteensa-osio + Twitch-kategoriat vierekkain samalla rivilla ---
+            const topRow = document.createElement('div');
+            topRow.style.cssText = 'display:flex; gap:16px; align-items:stretch; margin-bottom:20px; flex-wrap:wrap;';
+
             const totalBox = document.createElement('div');
-            totalBox.style.cssText = 'margin-bottom:20px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b;';
-            totalBox.innerHTML = `<div style="font-size:12px; color:#888; text-transform:uppercase; margin-bottom:4px;">Yhteensä katsottu</div>
+            totalBox.style.cssText = 'flex:1; min-width:200px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b; display:flex; flex-direction:column; gap:8px;';
+            totalBox.innerHTML = `<div style="font-size:12px; color:#888; text-transform:uppercase;">Yhteensä katsottu</div>
                 <div style="font-size:22px; font-weight:bold;">${formatWatchDuration(totalSeconds)}</div>
-                <div style="font-size:12px; color:#ccc; margin-top:8px; display:flex; gap:20px; flex-wrap:wrap;">
-                    <span style="display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-twitch">T</span> Twitch: ${formatWatchDuration(twitchSeconds)}</span>
-                    <span style="display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-kick">K</span> Kick: ${formatWatchDuration(kickSeconds)}</span>
-                </div>`;
-            body.appendChild(totalBox);
+                <div style="font-size:13px; color:#ccc; display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-twitch">T</span> Twitch: ${formatWatchDuration(twitchSeconds)}</div>
+                <div style="font-size:13px; color:#ccc; display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-kick">K</span> Kick: ${formatWatchDuration(kickSeconds)}</div>`;
+            topRow.appendChild(totalBox);
+
+            const catBox = document.createElement('div');
+            catBox.style.cssText = 'flex:2; min-width:280px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b;';
+            const catHeader = document.createElement('div');
+            catHeader.style.cssText = 'font-size:12px; color:#888; text-transform:uppercase; margin-bottom:8px;';
+            catHeader.textContent = 'Twitch-kategoriat (top 5)';
+            catBox.appendChild(catHeader);
+            const catContainer = document.createElement('div');
+            catBox.appendChild(catContainer);
+            buildCategoryPieChart(catContainer);
+            topRow.appendChild(catBox);
+
+            body.appendChild(topRow);
 
             // --- Top 10 pylvaina ---
             const top10 = entries.slice(0, 10);
@@ -985,7 +1044,7 @@
             });
             body.appendChild(barsRow);
 
-            // --- Loput listana ---
+            // --- Loput listana, numeroituna ---
             const rest = entries.slice(10);
             if (rest.length > 0) {
                 const restHeader = document.createElement('div');
@@ -993,13 +1052,17 @@
                 restHeader.textContent = 'Muut katsotut kanavat';
                 body.appendChild(restHeader);
 
-                rest.forEach(e => {
+                rest.forEach((e, i) => {
                     const row = document.createElement('div');
                     row.className = 'saved-channel';
                     row.style.cursor = 'default';
 
                     const left = document.createElement('span');
                     left.className = 'left-group';
+                    const rankSpan = document.createElement('span');
+                    rankSpan.style.cssText = 'font-size:12px; color:#888; width:26px; flex-shrink:0;';
+                    rankSpan.textContent = (i + 11) + '.';
+                    left.appendChild(rankSpan);
                     left.appendChild(createPlatformBadge(e.plat));
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'name-text';
@@ -1015,16 +1078,6 @@
                     body.appendChild(row);
                 });
             }
-
-            // --- Twitch-kategoriat ympyrakaaviona ---
-            const catHeader = document.createElement('div');
-            catHeader.style.cssText = 'font-size:12px; color:#888; text-transform:uppercase; margin:20px 0 8px;';
-            catHeader.textContent = 'Twitch-kategoriat (top 5)';
-            body.appendChild(catHeader);
-
-            const catContainer = document.createElement('div');
-            body.appendChild(catContainer);
-            buildCategoryPieChart(catContainer);
         }
 
         function formatBlacklistAge(addedAt) {
@@ -2256,14 +2309,17 @@
             updateAutoRefreshUI();
         }, 1000);
 
-        // Modaalin sekuntinaytto (blacklist-merkintojen "lisatty X min" -teksti paivittyy),
-        // sekunnin valein, riippumatta Automaattinen paivitys -kytkimesta. HUOM: itse
-        // blacklist-merkinnat EIVAT koskaan poistu tasta automaattisesti - vain naytetty
-        // ika-teksti lakkaa nakymasta (ks. formatBlacklistAge). Poisto tapahtuu ainoastaan
-        // manuaalisesti X-napista.
+        // Modaalin sekuntinaytto (blacklist-merkintojen "lisatty X min" -teksti paivittyy,
+        // ja tilastomodaalin ajat paivittyvat jos se on auki), sekunnin valein, riippumatta
+        // Automaattinen paivitys -kytkimesta. HUOM: itse blacklist-merkinnat EIVAT koskaan
+        // poistu tasta automaattisesti - vain naytetty ika-teksti lakkaa nakymasta (ks.
+        // formatBlacklistAge). Poisto tapahtuu ainoastaan manuaalisesti X-napista.
         setInterval(() => {
             if (document.getElementById('blacklistModal').style.display === 'flex') {
                 renderBlacklistModal();
+            }
+            if (document.getElementById('statsModal').style.display === 'flex') {
+                renderStatsModal();
             }
         }, 1000);
 
@@ -2397,6 +2453,22 @@
         // kaatuu/sammuu odottamatta, seka viela kerran juuri ennen sivun sulkeutumista.
         setInterval(flushAllActiveSessions, 30000);
         window.addEventListener('beforeunload', flushAllActiveSessions);
+
+        // Katseluaika lasketaan vain kun sivu on seka nakyvissa etta fokusoituna - alt-tab
+        // toiseen ikkunaan tai eri valilehdelle siirtyminen pysayttaa laskennan siksi aikaa.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pauseAllWatchSessions();
+            } else if (document.hasFocus()) {
+                resumeAllWatchSessions();
+            }
+        });
+        window.addEventListener('blur', () => {
+            pauseAllWatchSessions();
+        });
+        window.addEventListener('focus', () => {
+            if (!document.hidden) resumeAllWatchSessions();
+        });
         if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
         refreshKickLiveStatus();
     </script>
