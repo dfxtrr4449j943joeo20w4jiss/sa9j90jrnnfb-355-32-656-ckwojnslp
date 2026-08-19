@@ -1445,26 +1445,37 @@
             document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        // F11: piilottaa/nayttaa MOLEMMAT sivupalkit. Tama EI kuuntele F11-nappainta
-        // itse (se osoittautui epaluotettavaksi - selain ei aina paasta keydown-tapahtumaa
-        // sivun JS:aan asti F11:n kohdalla, jolloin oma tilamme ja selaimen fullscreen-tila
-        // ajautuivat epasynkkaan ja piti valilla painaa nappainta 3-4 kertaa saadaksesi
-        // normaalitilan takaisin). Sen sijaan sivupalkit PEILAAVAT suoraan selaimen
-        // todellista fullscreen-tilaa (document.fullscreenElement) fullscreenchange-
-        // tapahtuman kautta - tama on ainoa "totuus", joten mitaan ei voi ajautua
-        // epasynkkaan: F11 ohjaa selainta, selain kertoo meille mita se teki, me
-        // peilaamme sen suoraan.
-        function syncSidebarsToFullscreen() {
-            const isFullscreen = !!document.fullscreenElement;
+        // F11: piilottaa/nayttaa MOLEMMAT sivupalkit. HUOM: document.fullscreenElement /
+        // fullscreenchange-tapahtuma EI laukea Firefoxin natiivista F11-koko naytto
+        // -toiminnosta (todettu kayttajan toimesta) - se koskee vain JS:n omaa
+        // Fullscreen-API:a (esim. videon fullscreen-nappi), ei selaimen F11-nappainta.
+        // Talloin ainoa vaihtoehto on kuunnella itse F11-nappainta. Ongelmana on ollut
+        // etta selain nielaisee keydown-tapahtuman satunnaisesti juuri fullscreen-
+        // siirtymän aikana (fokus siirtyy hetkeksi selaimen omaan kayttoliittymaan).
+        // Tata varten kuunnellaan SEKA keydown etta keyup, capture-vaiheessa (ennen
+        // muita kasittelijoita), jotta useampi mahdollisuus napata tapahtuma - ja
+        // debounce varmistaa ettei yksi fyysinen painallus laukaise kahta vaihtoa jos
+        // molemmat sattuisivat lapaisemaan.
+        function toggleBothSidebars() {
             const leftSb = document.getElementById('sidebar');
             const rightSb = document.getElementById('rightSidebar');
-            leftSb.classList.toggle('collapsed', isFullscreen);
-            rightSb.classList.toggle('collapsed', isFullscreen);
+            const shouldHide = !leftSb.classList.contains('collapsed');
+            leftSb.classList.toggle('collapsed', shouldHide);
+            rightSb.classList.toggle('collapsed', shouldHide);
             document.getElementById('toggleBtn').innerText = leftSb.classList.contains('collapsed') ? '▶' : '◀';
             document.getElementById('toggleBtnRight').innerText = rightSb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        document.addEventListener('fullscreenchange', syncSidebarsToFullscreen);
+        let lastF11ToggleAt = 0;
+        function handleF11Key(e) {
+            if (e.key !== 'F11') return;
+            const now = Date.now();
+            if (now - lastF11ToggleAt < 250) return;
+            lastF11ToggleAt = now;
+            toggleBothSidebars();
+        }
+        window.addEventListener('keydown', handleF11Key, true);
+        window.addEventListener('keyup', handleF11Key, true);
 
         // ---------- Listojen renderointi ----------
 
@@ -1788,6 +1799,19 @@
             gridMode = val;
             localStorage.setItem('gridMode', val);
             const newVisibleCount = getVisibleSlotCount();
+
+            if (val === 'roulette') {
+                // Kick ei ole mukana Ruletissa (raakaa iframe-embedia ei voi pakottaa
+                // jatkamaan resize-jumin jalkeen kuten Twitch-playeria voidaan) - poistetaan
+                // mahdolliset Kick-striimit jotka sattuvat olemaan nakyvilla rulettipaikoilla.
+                for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
+                    const physicalIdx = visualOrder[vp];
+                    if (slots[physicalIdx] && slots[physicalIdx].dataset.plat === 'kick') {
+                        clearSlot(physicalIdx);
+                    }
+                }
+            }
+
             updateGridDisplay();
 
             if (newVisibleCount > oldVisibleCount) {
@@ -1846,6 +1870,7 @@
                 const physicalIdx = visualOrder[vp];
                 const slot = slots[physicalIdx];
                 if (!slot || !slot.dataset.name) continue;
+                if (slot.dataset.plat === 'kick') continue; // Kick ei ole mukana Ruletissa
                 const key = slot.dataset.plat + ':' + slot.dataset.name.toLowerCase();
                 if (!rouletteSpotlightHistory.has(key)) candidates.push(physicalIdx);
             }
@@ -1858,7 +1883,7 @@
                     if (vp === ROULETTE_SPOTLIGHT_VISUAL_POS) continue;
                     const physicalIdx = visualOrder[vp];
                     const slot = slots[physicalIdx];
-                    if (slot && slot.dataset.name) candidates.push(physicalIdx);
+                    if (slot && slot.dataset.name && slot.dataset.plat !== 'kick') candidates.push(physicalIdx);
                 }
             }
 
@@ -1896,16 +1921,31 @@
 
             // Twitch-playerit voidaan mykistaa uudelleen API:n kautta (ei uudelleenlatausta)
             // sen varalta etta joku on klikannut aani paalle Twitchin omista ohjaimista
-            // silloin kun striimi oli iso valokeilaruutu - Kickin raa'an iframen mykistysta
-            // ei valitettavasti voi ohjata jalkikateen ilman uudelleenlatausta.
+            // silloin kun striimi oli iso valokeilaruutu.
             reassertMuteForPhysicalSlot(winnerPhysicalIdx);
             reassertMuteForPhysicalSlot(spotlightPhysicalIdx);
+
+            // Iso koon muutos (pieni <-> 2x2-valokeila) saa Twitch-playerin joskus jumiin
+            // yhteen kuvaan CSS-uudelleensijoituksesta huolimatta. Pakotetaan toisto
+            // uudelleen kaynnille pienella viiveella (annetaan resize-tapahtuman ensin
+            // ehtia kasitella) - ei lataa mitaan uudelleen, pelkka play()-komento.
+            setTimeout(() => {
+                reassertPlaybackForPhysicalSlot(winnerPhysicalIdx);
+                reassertPlaybackForPhysicalSlot(spotlightPhysicalIdx);
+            }, 150);
         }
 
         function reassertMuteForPhysicalSlot(physicalIdx) {
             const player = twitchPlayers[physicalIdx];
             if (player && typeof player.setMuted === 'function') {
                 try { player.setMuted(true); } catch (e) { /* ohitetaan hiljaa */ }
+            }
+        }
+
+        function reassertPlaybackForPhysicalSlot(physicalIdx) {
+            const player = twitchPlayers[physicalIdx];
+            if (player && typeof player.play === 'function') {
+                try { player.play(); } catch (e) { /* ohitetaan hiljaa */ }
             }
         }
 
@@ -1982,6 +2022,10 @@
             const name = input.value.trim().toLowerCase();
             const plat = document.getElementById('platform').value;
             if (!name) return;
+            if (gridMode === 'roulette' && plat === 'kick') {
+                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
+                return;
+            }
             if (!savedChannels.find(c => c.name === name && c.plat === plat)) {
                 savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null, lastCheckedAt: 0 });
                 persistSavedChannels();
@@ -1999,6 +2043,10 @@
         }
 
         function processNewChannelManual(name, plat) {
+            if (gridMode === 'roulette' && plat === 'kick') {
+                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
+                return false;
+            }
             const freeIdx = getFirstFreeVisibleSlotIndex();
             if (freeIdx !== -1) {
                 loadStreamIntoSlot(freeIdx, name, plat);
@@ -2010,6 +2058,10 @@
         }
 
         function loadFromCategorySearch(name, plat) {
+            if (gridMode === 'roulette' && plat === 'kick') {
+                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
+                return false;
+            }
             const freeIdx = getFirstFreeVisibleSlotIndex();
             if (freeIdx !== -1) {
                 loadStreamIntoSlot(freeIdx, name, plat);
@@ -2109,6 +2161,7 @@
                 const candidates = savedChannels.filter(c => {
                     if (c.isLive !== true) return false;
                     if (isChannelStatusStale(c)) return false;
+                    if (gridMode === 'roulette' && c.plat === 'kick') return false;
                     if (excludeKeys.includes(`${c.plat}:${c.name}`)) return false;
                     if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
                     if (!ignoreCooldown && (now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
