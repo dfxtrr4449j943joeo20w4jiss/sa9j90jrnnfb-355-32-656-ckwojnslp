@@ -104,6 +104,7 @@
         .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
         .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .stream-slot.active { border: 2px solid #26262b; }
+        .stream-slot.spotlight { border: 3px solid #f3c611; box-shadow: 0 0 24px rgba(243, 198, 17, 0.45); }
         .slot-controls { position: absolute; top: 5px; left: 5px; z-index: 20; display: none; gap: 5px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; align-items: center; }
         .stream-slot:hover .slot-controls { display: flex; }
         .drag-handle { background: #333; padding: 2px 8px; cursor: grab; color: white; border-radius: 4px; user-select: none; }
@@ -146,10 +147,29 @@
     <div id="statsModal" class="modal-overlay">
         <div class="modal-box wide">
             <div class="modal-header">
-                <span>Katselutilastot</span>
+                <span style="display:flex; align-items:center; gap:10px;">Katselutilastot
+                    <button class="btn-sm" style="flex:none; padding:3px 10px; font-size:11px; background:#eb0400; color:#fff; font-weight:bold;" onclick="openResetConfirmModal()">Reset</button>
+                </span>
                 <button class="modal-close-btn" onclick="closeStatsModal()">×</button>
             </div>
             <div id="statsModalBody" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="resetConfirmModal" class="modal-overlay">
+        <div class="modal-box" style="width:360px; height:auto;">
+            <div class="modal-header">
+                <span>Nollaa katselutilastot</span>
+                <button class="modal-close-btn" onclick="closeResetConfirmModal()">×</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+                <div style="font-size:13px; color:#ccc;">Tämä poistaa KAIKKI katselutilastot pysyvästi. Kirjoita <strong>reset</strong> ja paina Vahvista.</div>
+                <input type="text" id="resetConfirmInput" placeholder="reset" autocomplete="off" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); confirmResetWatchStats(); }">
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-sm" style="flex:1;" onclick="closeResetConfirmModal()">Peruuta</button>
+                    <button class="btn-danger" style="flex:1;" onclick="confirmResetWatchStats()">Vahvista</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -165,6 +185,7 @@
                 <div class="btn-group">
                     <button id="btn-4" class="btn-sm" onclick="changeGridMode(4)">4x4</button>
                     <button id="btn-5" class="btn-sm" onclick="changeGridMode(5)">5x5</button>
+                    <button id="btn-roulette" class="btn-sm" onclick="changeGridMode('roulette')">Ruletti</button>
                 </div>
                 <div style="display: flex; gap: 5px; flex-shrink: 0;">
                     <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
@@ -214,9 +235,8 @@
 
                 <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat <span id="liveStatusIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Täytä paikat automaattisesti: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla. Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Salli ruudukon koon ylitäyttö: vaatii Täytä paikat automaattisesti päällä. Jos tallennettuja, oikeassa kategoriassa livenä olevia kanavia on tarpeeksi täyttämään seuraava isompi ruudukkokoko kokonaan, vaihtaa ruudukon automaattisesti isommaksi ja täyttää uudet paikat (ohittaen 30 min jäähyn juuri kasvatetulle ruudukolle). Pienentää ruudukon myös automaattisesti takaisin, jos livenä olevien kanavien määrä myöhemmin tippuu.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Arvo täytettävä striimi: kun päällä, tyhjään paikkaan valittava kanava arvotaan (jokaiselle ehdokkaalle satunnaisluku 1-yläraja, suurin voittaa, tasapelissä arvotaan uudelleen) sen sijaan että aina eniten katsojia omaava voittaisi suoraan - antaa pienemmillekin kanaville mahdollisuuden.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.&#10;&#10;Laatuprofiilin pakotus pienille ruuduille: pakottaa Twitch-striimit valittuun laatuun (ei koske Kickiä). Jos valittu laatu ei ole saatavilla, käytetään lähintä ylempää, viimeisenä keinona Sourcea. Suositellaan päälle 4x4/5x5-ruudukoissa.&#10;&#10;Tilastot-nappi: näyttää katseluaikatilastot per kanava, alustoittain ja Twitch-kategorioittain.">?</button>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Täytä paikat automaattisesti: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla. Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Salli ruudukon koon ylitäyttö: vaatii Täytä paikat automaattisesti päällä. Jos tallennettuja, oikeassa kategoriassa livenä olevia kanavia on tarpeeksi täyttämään seuraava isompi ruudukkokoko kokonaan, vaihtaa ruudukon automaattisesti isommaksi ja täyttää uudet paikat (ohittaen 30 min jäähyn juuri kasvatetulle ruudukolle). Pienentää ruudukon myös automaattisesti takaisin, jos livenä olevien kanavien määrä myöhemmin tippuu. TOIMII VAIN tavallisissa 1x1-5x5-tiloissa - ei koskaan Ruletti-tilassa.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Arvo täytettävä striimi: kun päällä, tyhjään paikkaan valittava kanava arvotaan (jokaiselle ehdokkaalle satunnaisluku 1-yläraja, suurin voittaa, tasapelissä arvotaan uudelleen) sen sijaan että aina eniten katsojia omaava voittaisi suoraan - antaa pienemmillekin kanaville mahdollisuuden. Sama arvontamekaniikka ja yläraja-slideri koskee myös Ruletin valokeilan arvontaa.&#10;&#10;Ruletti - minuuttia per valokeila: koskee vain Ruletti-ruudukkotilaa (nappi ruudukkokokojen vieressä). 12 pientä ruutua + 1 iso 2x2-valokeilaruutu keskellä. Tämän minuuttimäärän välein arvotaan uusi striimi valokeilaan; poistuva siirtyy viimeiselle sijalle. Jokainen pääsee valokeilaan vain kerran per kierros ennen kuin kaikki voivat taas voittaa.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.&#10;&#10;Laatuprofiilin pakotus pienille ruuduille: pakottaa Twitch-striimit valittuun laatuun (ei koske Kickiä). Jos valittu laatu ei ole saatavilla, käytetään lähintä ylempää, viimeisenä keinona Sourcea. Suositellaan päälle 4x4/5x5-ruudukoissa.&#10;&#10;Tilastot-nappi: näyttää katseluaikatilastot per kanava, alustoittain ja Twitch-kategorioittain.">?</button>
                     <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px; background:#3a3a3d;" onclick="openStatsModal()">Tilastot</button>
-                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px; background:#3a3a3d;" onclick="resetWatchStats()">Reset</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
                 <div id="liveStatusBody">
@@ -271,6 +291,13 @@
                             <span id="randomFillMaxRollValue">1000</span>
                         </div>
                         <input type="range" id="randomFillMaxRollSlider" min="100" max="1000" value="1000" oninput="onRandomFillMaxRollChange()">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-row-label">
+                            <span>Ruletti - minuuttia per valokeila</span>
+                            <span id="rouletteMinutesValue">3 min</span>
+                        </div>
+                        <input type="range" id="rouletteMinutesSlider" min="1" max="10" value="3" oninput="onRouletteMinutesChange()">
                     </div>
                     <div class="auto-refresh-row">
                         <label class="auto-refresh-toggle">
@@ -354,8 +381,46 @@
     <script>
         const MAX_SLOTS = 25;
         const VALID_GRID_MODES = [1, 2, 3, 4, 5];
-        const storedGridMode = parseInt(localStorage.getItem('gridMode'));
-        let gridMode = VALID_GRID_MODES.includes(storedGridMode) ? storedGridMode : 3;
+
+        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskella oleva
+        // 2x2-alue on yhdistetty yhdeksi isoksi "valokeila"-ruuduksi. Yhteensa 12 pientä +
+        // 1 iso = 13 kaytettavaa paikkaa. Visuaalinen paikka 6 = valokeila, paikka 12 = viimeinen.
+        const ROULETTE_LAYOUT = [
+            { col: '1 / 2', row: '1 / 2' }, // 0  ylin rivi 1
+            { col: '2 / 3', row: '1 / 2' }, // 1  ylin rivi 2
+            { col: '3 / 4', row: '1 / 2' }, // 2  ylin rivi 3
+            { col: '4 / 5', row: '1 / 2' }, // 3  ylin rivi 4
+            { col: '1 / 2', row: '2 / 3' }, // 4  vasen ylä
+            { col: '1 / 2', row: '3 / 4' }, // 5  vasen ala
+            { col: '2 / 4', row: '2 / 4' }, // 6  VALOKEILA (2x2)
+            { col: '4 / 5', row: '2 / 3' }, // 7  oikea ylä
+            { col: '4 / 5', row: '3 / 4' }, // 8  oikea ala
+            { col: '1 / 2', row: '4 / 5' }, // 9  alin rivi 1
+            { col: '2 / 3', row: '4 / 5' }, // 10 alin rivi 2
+            { col: '3 / 4', row: '4 / 5' }, // 11 alin rivi 3
+            { col: '4 / 5', row: '4 / 5' }  // 12 alin rivi 4 (VIIMEINEN sija)
+        ];
+        const ROULETTE_SLOT_COUNT = ROULETTE_LAYOUT.length;
+        const ROULETTE_SPOTLIGHT_VISUAL_POS = 6;
+        const ROULETTE_LAST_VISUAL_POS = 12;
+
+        let rouletteIntervalId = null;
+        // "plat:name" -avaimet jotka ovat jo olleet valokeilassa talla Ruletti-kierroksella.
+        let rouletteSpotlightHistory = new Set();
+        let rouletteMinutes = 3;
+        try {
+            const storedRm = parseInt(localStorage.getItem('rouletteMinutes'));
+            if (storedRm >= 1 && storedRm <= 10) rouletteMinutes = storedRm;
+        } catch (e) { rouletteMinutes = 3; }
+
+        const storedGridModeRaw = localStorage.getItem('gridMode');
+        let gridMode;
+        if (storedGridModeRaw === 'roulette') {
+            gridMode = 'roulette';
+        } else {
+            const storedGridMode = parseInt(storedGridModeRaw);
+            gridMode = VALID_GRID_MODES.includes(storedGridMode) ? storedGridMode : 3;
+        }
 
         let savedChannels = [];
         try {
@@ -369,7 +434,8 @@
             lastClosedLiveAt: c.lastClosedLiveAt || 0,
             isLive: (typeof c.isLive === 'boolean') ? c.isLive : null,
             viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null,
-            gameName: (typeof c.gameName === 'string') ? c.gameName : null
+            gameName: (typeof c.gameName === 'string') ? c.gameName : null,
+            lastCheckedAt: (typeof c.lastCheckedAt === 'number') ? c.lastCheckedAt : 0
         }));
 
         let twitchCreds = { clientId: '', token: '' };
@@ -529,6 +595,33 @@
 
         function getEnabledCategoryNames() {
             return categoryHistory.filter(h => h.enabled).map(h => h.name);
+        }
+
+        // Tunnistaa "zombi"-kanavat: sellaiset joiden live-tieto EI ole onnistuneesti
+        // paivittynyt pitkaan aikaan (esim. Kickin haku on alkanut epaonnistua hiljaisesti
+        // juuri sille kanavalle). Ilman tata tunnistusta vanha "livena"-tieto voisi jaada
+        // ikuisesti voimaan vaikka striimi olisi jo paattynyt tunteja sitten - kanava
+        // nayttaisi vihreana loputtomiin eika koskaan poistuisi playerista automaattisesti.
+        // Kynnys on vahintaan 20 min TAI 5x paivitysvali, kumpi on suurempi.
+        function isChannelStatusStale(c) {
+            if (!c.lastCheckedAt) return false;
+            const threshold = Math.max(20 * 60 * 1000, autoRefreshIntervalSeconds * 1000 * 5);
+            return (Date.now() - c.lastCheckedAt) > threshold;
+        }
+
+        // Sulkee automaattisesti paikat joiden kanava on todettu offline-tilaan TAI joiden
+        // live-tieto on vanhentunut (ks. isChannelStatusStale). Tama estaa "musta ruutu joka
+        // ei koskaan poistu" -tilanteen. Toimii AINA, riippumatta Tayta paikat automaattisesti
+        // -asetuksesta, koska tama on pelkkaa siivousta eika uuden sisallon lisaamista.
+        function checkOfflineOrStaleEviction() {
+            slots.forEach((s, i) => {
+                if (!s.dataset.name) return;
+                const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
+                if (!entry) return;
+                if (entry.isLive === false || isChannelStatusStale(entry)) {
+                    clearSlot(i);
+                }
+            });
         }
 
         // ---------- Levenshtein-pohjainen nimien samankaltaisuus (0-100%) ----------
@@ -820,10 +913,24 @@
             });
         }
 
-        function resetWatchStats() {
-            const val = prompt('Tama poistaa KAIKKI katselutilastot pysyvasti. Kirjoita "reset" ja paina OK vahvistaaksesi.');
-            if (val === null) return;
-            if (val.trim().toLowerCase() !== 'reset') {
+        // Ei-blokkaava vahvistusmodaali tilastojen nollaukselle - korvaa aiemman prompt()-
+        // pohjaisen version, koska prompt() (kuten alert()) pysayttaa koko sivun JS:n ja
+        // sen mukana videot siksi aikaa kun ikkuna on auki.
+        function openResetConfirmModal() {
+            const input = document.getElementById('resetConfirmInput');
+            input.value = '';
+            document.getElementById('resetConfirmModal').style.display = 'flex';
+            setTimeout(() => input.focus(), 0);
+        }
+
+        function closeResetConfirmModal() {
+            document.getElementById('resetConfirmModal').style.display = 'none';
+        }
+
+        function confirmResetWatchStats() {
+            const val = document.getElementById('resetConfirmInput').value.trim().toLowerCase();
+            closeResetConfirmModal();
+            if (val !== 'reset') {
                 showToast('Nollaus peruttu - kirjoitettu teksti ei tasmannyt.');
                 return;
             }
@@ -923,7 +1030,7 @@
                 return;
             }
 
-            const colors = ['#9146ff', '#53fc18', '#f3c611', '#eb0400', '#3ea6ff', '#888888'];
+            const colors = ['#f3c611', '#eb0400', '#3ea6ff', '#ff8c42', '#e057a1', '#888888'];
             const slices = [...top5];
             if (restTotal > 0) slices.push(['Muut', restTotal]);
 
@@ -1290,7 +1397,7 @@
         function toggleSavedFromPlayer(name, plat, btnEl) {
             const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
             if (idx === -1) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null, lastCheckedAt: 0 });
                 if (btnEl) btnEl.classList.add('favorited');
             } else {
                 savedChannels.splice(idx, 1);
@@ -1383,7 +1490,7 @@
             const enabledCategories = getEnabledCategoryNames();
 
             function rank(c) {
-                if (c.isLive === true) {
+                if (c.isLive === true && !isChannelStatusStale(c)) {
                     if (enabledCategories.length === 0) return 0;
                     const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
                     return matches ? 0 : 1;
@@ -1401,6 +1508,12 @@
         }
 
         function getDotStatus(c) {
+            if (c.isLive === true && isChannelStatusStale(c)) {
+                return {
+                    cls: 'unknown',
+                    title: 'Live-tieto on vanhentunut (ei ole paivittynyt viime aikoina) - nayta harmaana kunnes seuraava tarkistus onnistuu'
+                };
+            }
             if (c.isLive === null) {
                 return {
                     cls: 'unknown',
@@ -1612,32 +1725,68 @@
 
         // ---------- Ruudukkokoko ----------
 
+        function getVisibleSlotCount() {
+            return gridMode === 'roulette' ? ROULETTE_SLOT_COUNT : gridMode * gridMode;
+        }
+
+        function gridModeLabel() {
+            return gridMode === 'roulette' ? 'Ruletti' : `${gridMode}x${gridMode}`;
+        }
+
         function updateGridDisplay() {
             const container = document.getElementById('streamGrid');
-            container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
-            container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
             document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-' + gridMode).classList.add('active');
-            slots.forEach((s, physicalIdx) => {
-                const vp = getVisualPos(physicalIdx);
-                s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
-            });
+            const activeBtn = document.getElementById('btn-' + gridMode);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            if (gridMode === 'roulette') {
+                container.style.gridTemplateColumns = 'repeat(4, 1fr)';
+                container.style.gridTemplateRows = 'repeat(4, 1fr)';
+                slots.forEach((s, physicalIdx) => {
+                    const vp = getVisualPos(physicalIdx);
+                    if (vp < ROULETTE_SLOT_COUNT) {
+                        s.style.display = 'flex';
+                        s.style.gridColumn = ROULETTE_LAYOUT[vp].col;
+                        s.style.gridRow = ROULETTE_LAYOUT[vp].row;
+                        s.classList.toggle('spotlight', vp === ROULETTE_SPOTLIGHT_VISUAL_POS);
+                    } else {
+                        s.style.display = 'none';
+                        s.style.gridColumn = '';
+                        s.style.gridRow = '';
+                        s.classList.remove('spotlight');
+                    }
+                });
+            } else {
+                container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
+                container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
+                slots.forEach((s, physicalIdx) => {
+                    const vp = getVisualPos(physicalIdx);
+                    s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
+                    s.style.gridColumn = '';
+                    s.style.gridRow = '';
+                    s.classList.remove('spotlight');
+                });
+            }
             updateActiveListHeaderText();
         }
 
         function updateActiveListHeaderText() {
             const el = document.getElementById('activeListHeaderText');
             if (!el) return;
+            if (gridMode === 'roulette') {
+                el.textContent = `Aktiiviset striimit (Ruletti - ${ROULETTE_SLOT_COUNT})`;
+                return;
+            }
             const max = gridMode * gridMode;
             el.textContent = max === 1 ? 'Aktiiviset striimit (1)' : `Aktiiviset striimit (1-${max})`;
         }
 
         function changeGridMode(val) {
-            if (!VALID_GRID_MODES.includes(val)) return;
-            const oldVisibleCount = gridMode * gridMode;
+            if (!VALID_GRID_MODES.includes(val) && val !== 'roulette') return;
+            const oldVisibleCount = getVisibleSlotCount();
             gridMode = val;
             localStorage.setItem('gridMode', val);
-            const newVisibleCount = gridMode * gridMode;
+            const newVisibleCount = getVisibleSlotCount();
             updateGridDisplay();
 
             if (newVisibleCount > oldVisibleCount) {
@@ -1648,6 +1797,96 @@
                     }
                 });
             }
+            startOrStopRouletteTimer();
+        }
+
+        // ---------- Ruletti: valokeilan kierratys ----------
+
+        function startOrStopRouletteTimer() {
+            if (rouletteIntervalId) {
+                clearInterval(rouletteIntervalId);
+                rouletteIntervalId = null;
+            }
+            if (gridMode === 'roulette') {
+                rouletteSpotlightHistory = new Set();
+                rouletteIntervalId = setInterval(rotateRouletteSpotlight, rouletteMinutes * 60 * 1000);
+            }
+        }
+
+        function onRouletteMinutesChange() {
+            rouletteMinutes = parseInt(document.getElementById('rouletteMinutesSlider').value);
+            localStorage.setItem('rouletteMinutes', rouletteMinutes);
+            updateRouletteMinutesLabel();
+            if (gridMode === 'roulette') startOrStopRouletteTimer();
+        }
+
+        function updateRouletteMinutesLabel() {
+            document.getElementById('rouletteMinutesValue').textContent = rouletteMinutes + ' min';
+        }
+
+        // Vaihtaa Ruletin valokeilassa olevan striimin. Arvonta kayttaa samaa nappaa-suurin-
+        // voittaa -mekaniikkaa (ja samaa yläraja-asetusta) kuin paikkojen automaattitaytto.
+        // Jokainen paasee valokeilaan vain kerran per kierros (rouletteSpotlightHistory) -
+        // kun kaikki muut ovat jo olleet vuorossa, kierros nollautuu. Valokeilasta poistuva
+        // siirtyy AINA viimeiselle sijalle (visuaalinen paikka 12).
+        function rotateRouletteSpotlight() {
+            if (gridMode !== 'roulette') return;
+
+            const spotlightPhysicalIdx = visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS];
+            const spotlightSlot = slots[spotlightPhysicalIdx];
+            const spotlightKey = (spotlightSlot && spotlightSlot.dataset.name)
+                ? spotlightSlot.dataset.plat + ':' + spotlightSlot.dataset.name.toLowerCase()
+                : null;
+            if (spotlightKey) rouletteSpotlightHistory.add(spotlightKey);
+
+            let candidates = [];
+            for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
+                if (vp === ROULETTE_SPOTLIGHT_VISUAL_POS) continue;
+                const physicalIdx = visualOrder[vp];
+                const slot = slots[physicalIdx];
+                if (!slot || !slot.dataset.name) continue;
+                const key = slot.dataset.plat + ':' + slot.dataset.name.toLowerCase();
+                if (!rouletteSpotlightHistory.has(key)) candidates.push(physicalIdx);
+            }
+
+            // Kaikki muut ovat jo olleet vuorossa - nollataan kierros (paitsi nykyinen
+            // valokeilassa oleva pysyy historiassa jottei se voi voittaa heti uudestaan).
+            if (candidates.length === 0) {
+                rouletteSpotlightHistory = new Set(spotlightKey ? [spotlightKey] : []);
+                for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
+                    if (vp === ROULETTE_SPOTLIGHT_VISUAL_POS) continue;
+                    const physicalIdx = visualOrder[vp];
+                    const slot = slots[physicalIdx];
+                    if (slot && slot.dataset.name) candidates.push(physicalIdx);
+                }
+            }
+
+            if (candidates.length === 0) return; // ei ketaan siirrettavaa
+
+            let pool = candidates.map(physicalIdx => ({ physicalIdx, roll: 1 + Math.floor(Math.random() * randomFillMaxRoll) }));
+            let maxRoll = Math.max(...pool.map(p => p.roll));
+            let tied = pool.filter(p => p.roll === maxRoll);
+            while (tied.length > 1) {
+                tied.forEach(p => { p.roll = 1 + Math.floor(Math.random() * randomFillMaxRoll); });
+                maxRoll = Math.max(...tied.map(p => p.roll));
+                tied = tied.filter(p => p.roll === maxRoll);
+            }
+            const winnerPhysicalIdx = tied[0].physicalIdx;
+            const winnerVisualPos = getVisualPos(winnerPhysicalIdx);
+
+            const oldSpotlightPhysicalIdx = visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS];
+            const oldLastPhysicalIdx = visualOrder[ROULETTE_LAST_VISUAL_POS];
+
+            visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS] = winnerPhysicalIdx;
+            visualOrder[ROULETTE_LAST_VISUAL_POS] = oldSpotlightPhysicalIdx;
+            if (winnerVisualPos !== ROULETTE_LAST_VISUAL_POS) {
+                visualOrder[winnerVisualPos] = oldLastPhysicalIdx;
+            }
+
+            applyVisualOrder();
+            updateGridDisplay();
+            updateSlotNumbering();
+            saveLayout();
         }
 
         function muteAll() {
@@ -1702,7 +1941,7 @@
         // vapauttaa paikka. Automaattinen taytto/ylitaytto kayttaa omaa, erillista
         // logiikkaansa (runAutoFill/evaluateGridOvershoot) eika tama vaikuta siihen.
         function getFirstFreeVisibleSlotIndex() {
-            const visibleCount = gridMode * gridMode;
+            const visibleCount = getVisibleSlotCount();
             for (let vp = 0; vp < visibleCount; vp++) {
                 const physicalIdx = visualOrder[vp];
                 if (!slots[physicalIdx].classList.contains('active')) return physicalIdx;
@@ -1716,7 +1955,7 @@
             const plat = document.getElementById('platform').value;
             if (!name) return;
             if (!savedChannels.find(c => c.name === name && c.plat === plat)) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null, lastCheckedAt: 0 });
                 persistSavedChannels();
             }
             const freeIdx = getFirstFreeVisibleSlotIndex();
@@ -1727,7 +1966,7 @@
                 document.getElementById('channelSuggestions').innerHTML = '';
             } else {
                 renderSavedList();
-                showToast(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat käytössä. Kanava tallennettiin listaan, mutta sitä ei ladattu playeriin. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+                showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Kanava tallennettiin listaan, mutta sitä ei ladattu playeriin. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             }
         }
 
@@ -1738,7 +1977,7 @@
                 saveLayout();
                 return true;
             }
-            showToast(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+            showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             return false;
         }
 
@@ -1749,7 +1988,7 @@
                 saveLayout();
                 return true;
             }
-            showToast(`Kaikki ${gridMode}x${gridMode}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+            showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
             return false;
         }
 
@@ -1830,7 +2069,7 @@
                 let isOfflineKnown = false;
                 if (!isEmpty) {
                     const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
-                    isOfflineKnown = !!(entry && entry.isLive === false);
+                    isOfflineKnown = !!(entry && (entry.isLive === false || isChannelStatusStale(entry)));
                 }
 
                 if (!isEmpty && !isOfflineKnown) return;
@@ -1841,6 +2080,7 @@
 
                 const candidates = savedChannels.filter(c => {
                     if (c.isLive !== true) return false;
+                    if (isChannelStatusStale(c)) return false;
                     if (excludeKeys.includes(`${c.plat}:${c.name}`)) return false;
                     if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
                     if (!ignoreCooldown && (now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
@@ -1919,6 +2159,7 @@
             const enabledCategories = getEnabledCategoryNames();
             return savedChannels.filter(c => {
                 if (c.isLive !== true) return false;
+                if (isChannelStatusStale(c)) return false;
                 if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
                 if (categoryFilterEnabled && enabledCategories.length > 0) {
                     const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
@@ -1929,6 +2170,9 @@
         }
 
         function evaluateGridOvershoot() {
+            // Ruletti on erikoistapaus (kiintea 13 paikan asettelu, ei NxN-neliomuotoinen) -
+            // ali/ylitaytto koskee vain tavallisia 1x1-5x5-tiloja, ei koskaan Ruletti-tilaa.
+            if (gridMode === 'roulette') return;
             if (!autoFillEnabled || !allowGridOvershoot) return;
             const availableCount = countAvailableLiveCandidates();
             let bestSize = VALID_GRID_MODES[0];
@@ -2196,11 +2440,13 @@
                         c.isLive = info !== undefined;
                         c.viewerCount = info !== undefined ? info.viewerCount : null;
                         c.gameName = info !== undefined ? info.gameName : null;
+                        c.lastCheckedAt = Date.now();
                     }
                 });
                 persistSavedChannels();
                 renderSavedList();
                 checkCategoryEviction();
+                checkOfflineOrStaleEviction();
                 if (autoFillEnabled) runAutoFill();
                 evaluateGridOvershoot();
             } catch (err) {
@@ -2231,6 +2477,7 @@
                     const data = await res.json();
                     if (data && typeof data === 'object' && 'livestream' in data) {
                         c.isLive = data.livestream !== null && data.livestream !== undefined;
+                        c.lastCheckedAt = Date.now();
                         if (c.isLive) {
                             const ls = data.livestream;
                             const vc = (typeof ls.viewer_count === 'number') ? ls.viewer_count
@@ -2248,16 +2495,22 @@
                         anyUpdated = true;
                     }
                 } catch (e) {
-                    // CORS-esto tms. - jatetaan kanavan tila ennalleen.
+                    // CORS-esto tms. - jatetaan kanavan tila ennalleen. lastCheckedAt EI
+                    // paivity tassa - jos tama jatkuu pitkaan, isChannelStatusStale()
+                    // havaitsee sen ja kanava "vanhenee" pois vihreasta automaattisesti.
                 }
             }
             if (anyUpdated) {
                 persistSavedChannels();
                 renderSavedList();
-                checkCategoryEviction();
-                if (autoFillEnabled) runAutoFill();
-                evaluateGridOvershoot();
             }
+            // Nama ajetaan AINA, ei vain anyUpdated-tilanteessa - vanhentumistarkistus pitaa
+            // tehda myos silloin kun kaikki tama kierroksen haut epaonnistuivat, koska juuri
+            // silloin lisaa aikaa on kulunut edellisesta onnistuneesta tarkistuksesta.
+            checkCategoryEviction();
+            checkOfflineOrStaleEviction();
+            if (autoFillEnabled) runAutoFill();
+            evaluateGridOvershoot();
         }
 
         // ---------- Automaattinen paivitys: kytkin + sekuntilaskuri + vali-liukusaadin ----------
@@ -2348,6 +2601,7 @@
                 allowGridOvershoot: localStorage.getItem('allowGridOvershoot'),
                 randomFillEnabled: localStorage.getItem('randomFillEnabled'),
                 randomFillMaxRoll: localStorage.getItem('randomFillMaxRoll'),
+                rouletteMinutes: localStorage.getItem('rouletteMinutes'),
                 forceQualityEnabled: localStorage.getItem('forceQualityEnabled'),
                 forceQualityLevel: localStorage.getItem('forceQualityLevel'),
                 watchStats: JSON.parse(localStorage.getItem('watchStats') || '{}'),
@@ -2397,6 +2651,7 @@
                     if (data.allowGridOvershoot !== undefined && data.allowGridOvershoot !== null) localStorage.setItem('allowGridOvershoot', data.allowGridOvershoot);
                     if (data.randomFillEnabled !== undefined && data.randomFillEnabled !== null) localStorage.setItem('randomFillEnabled', data.randomFillEnabled);
                     if (data.randomFillMaxRoll) localStorage.setItem('randomFillMaxRoll', data.randomFillMaxRoll);
+                    if (data.rouletteMinutes) localStorage.setItem('rouletteMinutes', data.rouletteMinutes);
                     if (data.forceQualityEnabled !== undefined && data.forceQualityEnabled !== null) localStorage.setItem('forceQualityEnabled', data.forceQualityEnabled);
                     if (data.forceQualityLevel) localStorage.setItem('forceQualityLevel', data.forceQualityLevel);
                     if (data.watchStats !== undefined) localStorage.setItem('watchStats', JSON.stringify(data.watchStats));
@@ -2440,6 +2695,9 @@
         updateAutoRefreshUI();
         restoreCollapsibleStates();
         initSlots();
+        startOrStopRouletteTimer();
+        document.getElementById('rouletteMinutesSlider').value = rouletteMinutes;
+        updateRouletteMinutesLabel();
         setupResizablePersistence('activeContent', 'boxHeight_active');
         setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
         setupResizablePersistence('kickListWrap', 'boxHeight_kick');
@@ -2448,6 +2706,9 @@
         });
         document.getElementById('statsModal').addEventListener('click', (e) => {
             if (e.target.id === 'statsModal') closeStatsModal();
+        });
+        document.getElementById('resetConfirmModal').addEventListener('click', (e) => {
+            if (e.target.id === 'resetConfirmModal') closeResetConfirmModal();
         });
         // Kirjoittaa katseluajat talteen 30s valein etta data ei katoa jos selain
         // kaatuu/sammuu odottamatta, seka viela kerran juuri ennen sivun sulkeutumista.
