@@ -1445,34 +1445,26 @@
             document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        // F11: piilottaa/nayttaa MOLEMMAT sivupalkit yhdella painalluksella, jotta
-        // playereille jaa mahdollisimman paljon tilaa. Tama toimii RINNAN selaimen oman
-        // natiivin F11-koko naytto -toiminnon kanssa (selain hoitaa sen itse eika sita
-        // voi eika tarvitse estaa JS:sta) - molemmat siis tapahtuvat samalla painalluksella.
-        function toggleBothSidebars() {
+        // F11: piilottaa/nayttaa MOLEMMAT sivupalkit. Tama EI kuuntele F11-nappainta
+        // itse (se osoittautui epaluotettavaksi - selain ei aina paasta keydown-tapahtumaa
+        // sivun JS:aan asti F11:n kohdalla, jolloin oma tilamme ja selaimen fullscreen-tila
+        // ajautuivat epasynkkaan ja piti valilla painaa nappainta 3-4 kertaa saadaksesi
+        // normaalitilan takaisin). Sen sijaan sivupalkit PEILAAVAT suoraan selaimen
+        // todellista fullscreen-tilaa (document.fullscreenElement) fullscreenchange-
+        // tapahtuman kautta - tama on ainoa "totuus", joten mitaan ei voi ajautua
+        // epasynkkaan: F11 ohjaa selainta, selain kertoo meille mita se teki, me
+        // peilaamme sen suoraan.
+        function syncSidebarsToFullscreen() {
+            const isFullscreen = !!document.fullscreenElement;
             const leftSb = document.getElementById('sidebar');
             const rightSb = document.getElementById('rightSidebar');
-            const shouldHide = !leftSb.classList.contains('collapsed');
-            leftSb.classList.toggle('collapsed', shouldHide);
-            rightSb.classList.toggle('collapsed', shouldHide);
+            leftSb.classList.toggle('collapsed', isFullscreen);
+            rightSb.classList.toggle('collapsed', isFullscreen);
             document.getElementById('toggleBtn').innerText = leftSb.classList.contains('collapsed') ? '▶' : '◀';
             document.getElementById('toggleBtnRight').innerText = rightSb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        let lastF11ToggleAt = 0;
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'F11') {
-                // Suoja tuplalaukaisulta: nappaimen "repeat"-tapahtuma seka Firefoxin oman
-                // koko naytto -siirtymän aiheuttama nopea uusintalaukaisu on molemmat havaittu
-                // aiheuttavan sen etta yksi fyysinen painallus vaihtaa tilan kahdesti (jolloin
-                // sivupalkit nayttavat "jaavan jumiin" pariton-parillinen -laskuvirheen takia).
-                if (e.repeat) return;
-                const now = Date.now();
-                if (now - lastF11ToggleAt < 400) return;
-                lastF11ToggleAt = now;
-                toggleBothSidebars();
-            }
-        });
+        document.addEventListener('fullscreenchange', syncSidebarsToFullscreen);
 
         // ---------- Listojen renderointi ----------
 
