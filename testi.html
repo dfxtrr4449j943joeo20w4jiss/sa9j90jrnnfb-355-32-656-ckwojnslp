@@ -1459,8 +1459,17 @@
             document.getElementById('toggleBtnRight').innerText = rightSb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
+        let lastF11ToggleAt = 0;
         document.addEventListener('keydown', (e) => {
             if (e.key === 'F11') {
+                // Suoja tuplalaukaisulta: nappaimen "repeat"-tapahtuma seka Firefoxin oman
+                // koko naytto -siirtymän aiheuttama nopea uusintalaukaisu on molemmat havaittu
+                // aiheuttavan sen etta yksi fyysinen painallus vaihtaa tilan kahdesti (jolloin
+                // sivupalkit nayttavat "jaavan jumiin" pariton-parillinen -laskuvirheen takia).
+                if (e.repeat) return;
+                const now = Date.now();
+                if (now - lastF11ToggleAt < 400) return;
+                lastF11ToggleAt = now;
                 toggleBothSidebars();
             }
         });
@@ -1873,20 +1882,39 @@
             }
             const winnerPhysicalIdx = tied[0].physicalIdx;
             const winnerVisualPos = getVisualPos(winnerPhysicalIdx);
+            const lastPositionPhysicalIdx = visualOrder[ROULETTE_LAST_VISUAL_POS];
 
-            const oldSpotlightPhysicalIdx = visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS];
-            const oldLastPhysicalIdx = visualOrder[ROULETTE_LAST_VISUAL_POS];
-
-            visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS] = winnerPhysicalIdx;
-            visualOrder[ROULETTE_LAST_VISUAL_POS] = oldSpotlightPhysicalIdx;
+            // Kaksi peräkkäistä TÄSMÄLLEEN samaa 2-way-vaihtoa kuin raahaus (drag&drop)
+            // käyttää (swapVisualOrderPositions) - ei koskaan lataa striimejä uudelleen:
+            // 1) voittaja <-> valokeila: voittaja nousee keskelle, entinen valokeilassa
+            //    ollut siirtyy voittajan vanhalle paikalle.
+            // 2) entinen valokeilassa ollut (nyt voittajan vanhalla paikalla) <-> viimeinen
+            //    sija: siirtää sen lopulliseen viimeiseen sijaan, ja viimeisella sijalla
+            //    ollut siirtyy voittajan vanhalle paikalle. Ohitetaan jos voittaja oli jo
+            //    valmiiksi viimeisella sijalla (silloin pelkka 1. vaihto riittaa).
+            swapVisualOrderPositions(winnerPhysicalIdx, spotlightPhysicalIdx);
             if (winnerVisualPos !== ROULETTE_LAST_VISUAL_POS) {
-                visualOrder[winnerVisualPos] = oldLastPhysicalIdx;
+                swapVisualOrderPositions(spotlightPhysicalIdx, lastPositionPhysicalIdx);
             }
 
             applyVisualOrder();
             updateGridDisplay();
             updateSlotNumbering();
             saveLayout();
+
+            // Twitch-playerit voidaan mykistaa uudelleen API:n kautta (ei uudelleenlatausta)
+            // sen varalta etta joku on klikannut aani paalle Twitchin omista ohjaimista
+            // silloin kun striimi oli iso valokeilaruutu - Kickin raa'an iframen mykistysta
+            // ei valitettavasti voi ohjata jalkikateen ilman uudelleenlatausta.
+            reassertMuteForPhysicalSlot(winnerPhysicalIdx);
+            reassertMuteForPhysicalSlot(spotlightPhysicalIdx);
+        }
+
+        function reassertMuteForPhysicalSlot(physicalIdx) {
+            const player = twitchPlayers[physicalIdx];
+            if (player && typeof player.setMuted === 'function') {
+                try { player.setMuted(true); } catch (e) { /* ohitetaan hiljaa */ }
+            }
         }
 
         function muteAll() {
@@ -1897,6 +1925,17 @@
         }
 
         // ---------- Raahaus: VAIN visuaalisen jarjestyksen vaihto, ei koskaan DOM-siirtoa ----------
+
+        // Yhteinen apufunktio: vaihtaa kahden FYYSISEN paikan visuaalisen sijainnin
+        // keskenaan. Taman kayttaa seka raahaus (drag&drop, alla) etta Ruletin arvonta -
+        // molemmat kayttavat siis TASMALLEEN samaa mekanismia. Ei koskaan lataa striimeja
+        // uudelleen, pelkka CSS-jarjestyksen (order / grid-column / grid-row) vaihto.
+        function swapVisualOrderPositions(physicalIdxA, physicalIdxB) {
+            const vpA = getVisualPos(physicalIdxA);
+            const vpB = getVisualPos(physicalIdxB);
+            visualOrder[vpA] = physicalIdxB;
+            visualOrder[vpB] = physicalIdxA;
+        }
 
         function drag(e, i) {
             e.dataTransfer.setData("src", i);
@@ -1920,10 +1959,7 @@
             const targetHasStream = !!slots[targetIdx].dataset.name;
             if (!srcHasStream && !targetHasStream) return;
 
-            const srcVisualPos = getVisualPos(srcIdx);
-            const targetVisualPos = getVisualPos(targetIdx);
-            visualOrder[srcVisualPos] = targetIdx;
-            visualOrder[targetVisualPos] = srcIdx;
+            swapVisualOrderPositions(srcIdx, targetIdx);
 
             applyVisualOrder();
             updateGridDisplay();
