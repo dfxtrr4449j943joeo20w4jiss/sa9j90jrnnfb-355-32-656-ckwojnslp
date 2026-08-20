@@ -384,30 +384,29 @@
         const MAX_SLOTS = 25;
         const VALID_GRID_MODES = [1, 2, 3, 4, 5];
 
-        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskimmainen
-        // ruutu (paikka 6) suurennetaan VISUAALISESTI CSS-transform:scale():lla kaksin-
-        // kertaiseksi peittamaan kolme viereista ruutua - EI aidolla grid-column/row-span-
-        // levityksella. Tama on tarkoituksellista: aito layout-koon muutos sai Twitchin
-        // playerin (ResizeObserver) joskus jumiin yhteen kuvaan. CSS-transform ei laukaise
-        // ResizeObserveria lainkaan, koska elementin todellinen layout-koko ei muutu - vain
-        // sen visuaalinen ulkoasu skaalataan. Kompromissi: valokeilan kuva on optisesti
-        // suurennettu (hieman pehmeampi) eika aidosti korkeammalla resoluutiolla renderoity.
-        // Yhteensa 12 pientä + 1 iso = 13 kaytettavaa paikkaa. Paikka 6 = valokeila,
-        // paikka 12 = viimeinen.
+        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskella oleva
+        // 2x2-alue on yhdistetty yhdeksi isoksi "valokeila"-ruuduksi (aito grid-column/row-
+        // span-levitys). HUOM: kokeilin talle myos CSS transform:scale()-pohjaista
+        // vaihtoehtoa (valttaen aidon layout-koon muutoksen kokonaan), mutta se osoittautui
+        // PAHEMMAKSI - striimit jumiutuivat heti eivatka vain satunnaisesti pitkan ajan
+        // jalkeen. Palattu takaisin aitoon resize-pohjaiseen versioon, jota tuetaan
+        // reassertMuteForPhysicalSlot/reassertPlaybackForPhysicalSlot-turvaverkoilla
+        // (ks. rotateRouletteSpotlight). Yhteensa 12 pientä + 1 iso = 13 kaytettavaa
+        // paikkaa. Visuaalinen paikka 6 = valokeila, paikka 12 = viimeinen.
         const ROULETTE_LAYOUT = [
-            { col: 1, row: 1 }, // 0  ylin rivi 1
-            { col: 2, row: 1 }, // 1  ylin rivi 2
-            { col: 3, row: 1 }, // 2  ylin rivi 3
-            { col: 4, row: 1 }, // 3  ylin rivi 4
-            { col: 1, row: 2 }, // 4  vasen ylä
-            { col: 1, row: 3 }, // 5  vasen ala
-            { col: 2, row: 2 }, // 6  VALOKEILA (visuaalisesti 2x2, transform:scale)
-            { col: 4, row: 2 }, // 7  oikea ylä
-            { col: 4, row: 3 }, // 8  oikea ala
-            { col: 1, row: 4 }, // 9  alin rivi 1
-            { col: 2, row: 4 }, // 10 alin rivi 2
-            { col: 3, row: 4 }, // 11 alin rivi 3
-            { col: 4, row: 4 }  // 12 alin rivi 4 (VIIMEINEN sija)
+            { col: '1 / 2', row: '1 / 2' }, // 0  ylin rivi 1
+            { col: '2 / 3', row: '1 / 2' }, // 1  ylin rivi 2
+            { col: '3 / 4', row: '1 / 2' }, // 2  ylin rivi 3
+            { col: '4 / 5', row: '1 / 2' }, // 3  ylin rivi 4
+            { col: '1 / 2', row: '2 / 3' }, // 4  vasen ylä
+            { col: '1 / 2', row: '3 / 4' }, // 5  vasen ala
+            { col: '2 / 4', row: '2 / 4' }, // 6  VALOKEILA (2x2)
+            { col: '4 / 5', row: '2 / 3' }, // 7  oikea ylä
+            { col: '4 / 5', row: '3 / 4' }, // 8  oikea ala
+            { col: '1 / 2', row: '4 / 5' }, // 9  alin rivi 1
+            { col: '2 / 3', row: '4 / 5' }, // 10 alin rivi 2
+            { col: '3 / 4', row: '4 / 5' }, // 11 alin rivi 3
+            { col: '4 / 5', row: '4 / 5' }  // 12 alin rivi 4 (VIIMEINEN sija)
         ];
         const ROULETTE_SLOT_COUNT = ROULETTE_LAYOUT.length;
         const ROULETTE_SPOTLIGHT_VISUAL_POS = 6;
@@ -1782,27 +1781,13 @@
                     const vp = getVisualPos(physicalIdx);
                     if (vp < ROULETTE_SLOT_COUNT) {
                         s.style.display = 'flex';
-                        const pos = ROULETTE_LAYOUT[vp];
-                        s.style.gridColumn = String(pos.col);
-                        s.style.gridRow = String(pos.row);
-                        const isSpotlight = vp === ROULETTE_SPOTLIGHT_VISUAL_POS;
-                        s.classList.toggle('spotlight', isSpotlight);
-                        if (isSpotlight) {
-                            s.style.transform = 'scale(2)';
-                            s.style.transformOrigin = 'top left';
-                            s.style.zIndex = '50';
-                        } else {
-                            s.style.transform = '';
-                            s.style.transformOrigin = '';
-                            s.style.zIndex = '';
-                        }
+                        s.style.gridColumn = ROULETTE_LAYOUT[vp].col;
+                        s.style.gridRow = ROULETTE_LAYOUT[vp].row;
+                        s.classList.toggle('spotlight', vp === ROULETTE_SPOTLIGHT_VISUAL_POS);
                     } else {
                         s.style.display = 'none';
                         s.style.gridColumn = '';
                         s.style.gridRow = '';
-                        s.style.transform = '';
-                        s.style.transformOrigin = '';
-                        s.style.zIndex = '';
                         s.classList.remove('spotlight');
                     }
                 });
@@ -1814,9 +1799,6 @@
                     s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
                     s.style.gridColumn = '';
                     s.style.gridRow = '';
-                    s.style.transform = '';
-                    s.style.transformOrigin = '';
-                    s.style.zIndex = '';
                     s.classList.remove('spotlight');
                 });
             }
@@ -2036,6 +2018,18 @@
             updateGridDisplay();
             updateSlotNumbering();
             saveLayout();
+
+            // Sama turvaverkko kuin Ruletin automaattisella arvonnalla: jos raahaus siirsi
+            // jommankumman Ruletin valokeilaan tai pois siita (iso koon muutos), varmistetaan
+            // etta Twitch-player pysyy mykistettyna ja jatkaa toistoa.
+            if (gridMode === 'roulette') {
+                reassertMuteForPhysicalSlot(srcIdx);
+                reassertMuteForPhysicalSlot(targetIdx);
+                setTimeout(() => {
+                    reassertPlaybackForPhysicalSlot(srcIdx);
+                    reassertPlaybackForPhysicalSlot(targetIdx);
+                }, 150);
+            }
         }
 
         // ---------- Kanavien lisays / poisto ----------
