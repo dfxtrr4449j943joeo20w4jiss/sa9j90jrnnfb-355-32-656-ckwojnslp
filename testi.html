@@ -105,6 +105,8 @@
         .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .stream-slot.active { border: 2px solid #26262b; }
         .stream-slot.spotlight { border: 3px solid #f3c611; box-shadow: 0 0 24px rgba(243, 198, 17, 0.45); }
+        .stats-section-header { font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
+        .stats-platform-line { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
         .slot-controls { position: absolute; top: 5px; left: 5px; z-index: 20; display: none; gap: 5px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; align-items: center; }
         .stream-slot:hover .slot-controls { display: flex; }
         .drag-handle { background: #333; padding: 2px 8px; cursor: grab; color: white; border-radius: 4px; user-select: none; }
@@ -382,23 +384,30 @@
         const MAX_SLOTS = 25;
         const VALID_GRID_MODES = [1, 2, 3, 4, 5];
 
-        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskella oleva
-        // 2x2-alue on yhdistetty yhdeksi isoksi "valokeila"-ruuduksi. Yhteensa 12 pientä +
-        // 1 iso = 13 kaytettavaa paikkaa. Visuaalinen paikka 6 = valokeila, paikka 12 = viimeinen.
+        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskimmainen
+        // ruutu (paikka 6) suurennetaan VISUAALISESTI CSS-transform:scale():lla kaksin-
+        // kertaiseksi peittamaan kolme viereista ruutua - EI aidolla grid-column/row-span-
+        // levityksella. Tama on tarkoituksellista: aito layout-koon muutos sai Twitchin
+        // playerin (ResizeObserver) joskus jumiin yhteen kuvaan. CSS-transform ei laukaise
+        // ResizeObserveria lainkaan, koska elementin todellinen layout-koko ei muutu - vain
+        // sen visuaalinen ulkoasu skaalataan. Kompromissi: valokeilan kuva on optisesti
+        // suurennettu (hieman pehmeampi) eika aidosti korkeammalla resoluutiolla renderoity.
+        // Yhteensa 12 pientä + 1 iso = 13 kaytettavaa paikkaa. Paikka 6 = valokeila,
+        // paikka 12 = viimeinen.
         const ROULETTE_LAYOUT = [
-            { col: '1 / 2', row: '1 / 2' }, // 0  ylin rivi 1
-            { col: '2 / 3', row: '1 / 2' }, // 1  ylin rivi 2
-            { col: '3 / 4', row: '1 / 2' }, // 2  ylin rivi 3
-            { col: '4 / 5', row: '1 / 2' }, // 3  ylin rivi 4
-            { col: '1 / 2', row: '2 / 3' }, // 4  vasen ylä
-            { col: '1 / 2', row: '3 / 4' }, // 5  vasen ala
-            { col: '2 / 4', row: '2 / 4' }, // 6  VALOKEILA (2x2)
-            { col: '4 / 5', row: '2 / 3' }, // 7  oikea ylä
-            { col: '4 / 5', row: '3 / 4' }, // 8  oikea ala
-            { col: '1 / 2', row: '4 / 5' }, // 9  alin rivi 1
-            { col: '2 / 3', row: '4 / 5' }, // 10 alin rivi 2
-            { col: '3 / 4', row: '4 / 5' }, // 11 alin rivi 3
-            { col: '4 / 5', row: '4 / 5' }  // 12 alin rivi 4 (VIIMEINEN sija)
+            { col: 1, row: 1 }, // 0  ylin rivi 1
+            { col: 2, row: 1 }, // 1  ylin rivi 2
+            { col: 3, row: 1 }, // 2  ylin rivi 3
+            { col: 4, row: 1 }, // 3  ylin rivi 4
+            { col: 1, row: 2 }, // 4  vasen ylä
+            { col: 1, row: 3 }, // 5  vasen ala
+            { col: 2, row: 2 }, // 6  VALOKEILA (visuaalisesti 2x2, transform:scale)
+            { col: 4, row: 2 }, // 7  oikea ylä
+            { col: 4, row: 3 }, // 8  oikea ala
+            { col: 1, row: 4 }, // 9  alin rivi 1
+            { col: 2, row: 4 }, // 10 alin rivi 2
+            { col: 3, row: 4 }, // 11 alin rivi 3
+            { col: 4, row: 4 }  // 12 alin rivi 4 (VIIMEINEN sija)
         ];
         const ROULETTE_SLOT_COUNT = ROULETTE_LAYOUT.length;
         const ROULETTE_SPOTLIGHT_VISUAL_POS = 6;
@@ -595,6 +604,28 @@
 
         function getEnabledCategoryNames() {
             return categoryHistory.filter(h => h.enabled).map(h => h.name);
+        }
+
+        // ---------- Yleiskäyttöiset apufunktiot toggle/slider-asetuksille ----------
+        // Suurin osa asetuspaneelin kytkimistä/liukusäätimistä noudattaa samaa kaavaa:
+        // lue elementin arvo, tallenna muuttujaan + localStorageen, päivitä mahdollinen
+        // näyttöteksti. Nämä kaksi kapseloivat sen toiston - jokainen yksittäinen
+        // onXChange()-funktio pysyy nimettynä (HTML:n onchange-attribuutit eivät muutu),
+        // mutta sen runko kutsuu vain tätä.
+        function applyToggleSetting(checkboxId, storageKey, setter) {
+            const val = document.getElementById(checkboxId).checked;
+            setter(val);
+            localStorage.setItem(storageKey, val);
+            return val;
+        }
+
+        function applySliderSetting(inputId, storageKey, setter, labelUpdateFn, parseAsInt = true) {
+            const raw = document.getElementById(inputId).value;
+            const val = parseAsInt ? parseInt(raw) : raw;
+            setter(val);
+            localStorage.setItem(storageKey, val);
+            if (labelUpdateFn) labelUpdateFn();
+            return val;
         }
 
         // Tunnistaa "zombi"-kanavat: sellaiset joiden live-tieto EI ole onnistuneesti
@@ -1100,14 +1131,14 @@
             totalBox.style.cssText = 'flex:1; min-width:200px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b; display:flex; flex-direction:column; gap:8px;';
             totalBox.innerHTML = `<div style="font-size:12px; color:#888; text-transform:uppercase;">Yhteensä katsottu</div>
                 <div style="font-size:22px; font-weight:bold;">${formatWatchDuration(totalSeconds)}</div>
-                <div style="font-size:13px; color:#ccc; display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-twitch">T</span> Twitch: ${formatWatchDuration(twitchSeconds)}</div>
-                <div style="font-size:13px; color:#ccc; display:flex; align-items:center; gap:6px;"><span class="platform-badge platform-kick">K</span> Kick: ${formatWatchDuration(kickSeconds)}</div>`;
+                <div class="stats-platform-line"><span class="platform-badge platform-twitch">T</span> Twitch: ${formatWatchDuration(twitchSeconds)}</div>
+                <div class="stats-platform-line"><span class="platform-badge platform-kick">K</span> Kick: ${formatWatchDuration(kickSeconds)}</div>`;
             topRow.appendChild(totalBox);
 
             const catBox = document.createElement('div');
             catBox.style.cssText = 'flex:2; min-width:280px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b;';
             const catHeader = document.createElement('div');
-            catHeader.style.cssText = 'font-size:12px; color:#888; text-transform:uppercase; margin-bottom:8px;';
+            catHeader.className = 'stats-section-header';
             catHeader.textContent = 'Twitch-kategoriat (top 5)';
             catBox.appendChild(catHeader);
             const catContainer = document.createElement('div');
@@ -1122,7 +1153,7 @@
             const maxSeconds = top10[0].seconds;
 
             const barsHeader = document.createElement('div');
-            barsHeader.style.cssText = 'font-size:12px; color:#888; text-transform:uppercase; margin-bottom:8px;';
+            barsHeader.className = 'stats-section-header';
             barsHeader.textContent = 'Top 10 katsotuinta';
             body.appendChild(barsHeader);
 
@@ -1155,7 +1186,7 @@
             const rest = entries.slice(10);
             if (rest.length > 0) {
                 const restHeader = document.createElement('div');
-                restHeader.style.cssText = 'font-size:12px; color:#888; text-transform:uppercase; margin-bottom:8px;';
+                restHeader.className = 'stats-section-header';
                 restHeader.textContent = 'Muut katsotut kanavat';
                 body.appendChild(restHeader);
 
@@ -1303,9 +1334,7 @@
         // ---------- Suodattimet: lahetysaika, kaksoiskappaleet ----------
 
         function onUptimeFilterChange() {
-            uptimeFilterHours = parseInt(document.getElementById('uptimeFilterSlider').value);
-            localStorage.setItem('uptimeFilterHours', uptimeFilterHours);
-            updateUptimeFilterLabel();
+            applySliderSetting('uptimeFilterSlider', 'uptimeFilterHours', v => { uptimeFilterHours = v; }, updateUptimeFilterLabel);
         }
 
         function updateUptimeFilterLabel() {
@@ -1313,14 +1342,11 @@
         }
 
         function onDuplicateCheckToggleChange() {
-            duplicateCheckEnabled = document.getElementById('duplicateCheckToggle').checked;
-            localStorage.setItem('duplicateCheckEnabled', duplicateCheckEnabled);
+            applyToggleSetting('duplicateCheckToggle', 'duplicateCheckEnabled', v => { duplicateCheckEnabled = v; });
         }
 
         function onDuplicateThresholdChange() {
-            duplicateNameThreshold = parseInt(document.getElementById('duplicateThresholdSlider').value);
-            localStorage.setItem('duplicateNameThreshold', duplicateNameThreshold);
-            updateDuplicateThresholdLabel();
+            applySliderSetting('duplicateThresholdSlider', 'duplicateNameThreshold', v => { duplicateNameThreshold = v; }, updateDuplicateThresholdLabel);
         }
 
         function updateDuplicateThresholdLabel() {
@@ -1724,14 +1750,12 @@
         }
 
         function onForceQualityToggleChange() {
-            forceQualityEnabled = document.getElementById('forceQualityToggle').checked;
-            localStorage.setItem('forceQualityEnabled', forceQualityEnabled);
+            applyToggleSetting('forceQualityToggle', 'forceQualityEnabled', v => { forceQualityEnabled = v; });
             if (forceQualityEnabled) reapplyQualityToAllPlayers();
         }
 
         function onForceQualityLevelChange() {
-            forceQualityLevel = document.getElementById('forceQualitySelect').value;
-            localStorage.setItem('forceQualityLevel', forceQualityLevel);
+            applySliderSetting('forceQualitySelect', 'forceQualityLevel', v => { forceQualityLevel = v; }, null, false);
             if (forceQualityEnabled) reapplyQualityToAllPlayers();
         }
 
@@ -1758,13 +1782,27 @@
                     const vp = getVisualPos(physicalIdx);
                     if (vp < ROULETTE_SLOT_COUNT) {
                         s.style.display = 'flex';
-                        s.style.gridColumn = ROULETTE_LAYOUT[vp].col;
-                        s.style.gridRow = ROULETTE_LAYOUT[vp].row;
-                        s.classList.toggle('spotlight', vp === ROULETTE_SPOTLIGHT_VISUAL_POS);
+                        const pos = ROULETTE_LAYOUT[vp];
+                        s.style.gridColumn = String(pos.col);
+                        s.style.gridRow = String(pos.row);
+                        const isSpotlight = vp === ROULETTE_SPOTLIGHT_VISUAL_POS;
+                        s.classList.toggle('spotlight', isSpotlight);
+                        if (isSpotlight) {
+                            s.style.transform = 'scale(2)';
+                            s.style.transformOrigin = 'top left';
+                            s.style.zIndex = '50';
+                        } else {
+                            s.style.transform = '';
+                            s.style.transformOrigin = '';
+                            s.style.zIndex = '';
+                        }
                     } else {
                         s.style.display = 'none';
                         s.style.gridColumn = '';
                         s.style.gridRow = '';
+                        s.style.transform = '';
+                        s.style.transformOrigin = '';
+                        s.style.zIndex = '';
                         s.classList.remove('spotlight');
                     }
                 });
@@ -1776,6 +1814,9 @@
                     s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
                     s.style.gridColumn = '';
                     s.style.gridRow = '';
+                    s.style.transform = '';
+                    s.style.transformOrigin = '';
+                    s.style.zIndex = '';
                     s.classList.remove('spotlight');
                 });
             }
@@ -1839,9 +1880,7 @@
         }
 
         function onRouletteMinutesChange() {
-            rouletteMinutes = parseInt(document.getElementById('rouletteMinutesSlider').value);
-            localStorage.setItem('rouletteMinutes', rouletteMinutes);
-            updateRouletteMinutesLabel();
+            applySliderSetting('rouletteMinutesSlider', 'rouletteMinutes', v => { rouletteMinutes = v; }, updateRouletteMinutesLabel);
             if (gridMode === 'roulette') startOrStopRouletteTimer();
         }
 
@@ -2198,33 +2237,27 @@
         }
 
         function onAutoFillToggleChange() {
-            autoFillEnabled = document.getElementById('autoFillToggle').checked;
-            localStorage.setItem('autoFillEnabled', autoFillEnabled);
+            applyToggleSetting('autoFillToggle', 'autoFillEnabled', v => { autoFillEnabled = v; });
             if (autoFillEnabled) {
                 refreshTwitchLiveStatus(true);
             }
         }
 
         function onCategoryFilterToggleChange() {
-            categoryFilterEnabled = document.getElementById('categoryFilterToggle').checked;
-            localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
+            applyToggleSetting('categoryFilterToggle', 'categoryFilterEnabled', v => { categoryFilterEnabled = v; });
         }
 
         function onGridOvershootToggleChange() {
-            allowGridOvershoot = document.getElementById('gridOvershootToggle').checked;
-            localStorage.setItem('allowGridOvershoot', allowGridOvershoot);
+            applyToggleSetting('gridOvershootToggle', 'allowGridOvershoot', v => { allowGridOvershoot = v; });
             if (allowGridOvershoot) evaluateGridOvershoot();
         }
 
         function onRandomFillToggleChange() {
-            randomFillEnabled = document.getElementById('randomFillToggle').checked;
-            localStorage.setItem('randomFillEnabled', randomFillEnabled);
+            applyToggleSetting('randomFillToggle', 'randomFillEnabled', v => { randomFillEnabled = v; });
         }
 
         function onRandomFillMaxRollChange() {
-            randomFillMaxRoll = parseInt(document.getElementById('randomFillMaxRollSlider').value);
-            localStorage.setItem('randomFillMaxRoll', randomFillMaxRoll);
-            updateRandomFillMaxRollLabel();
+            applySliderSetting('randomFillMaxRollSlider', 'randomFillMaxRoll', v => { randomFillMaxRoll = v; }, updateRandomFillMaxRollLabel);
         }
 
         function updateRandomFillMaxRollLabel() {
@@ -2604,16 +2637,13 @@
         }
 
         function onAutoRefreshToggleChange() {
-            autoRefreshEnabled = document.getElementById('autoRefreshToggle').checked;
-            localStorage.setItem('autoRefreshEnabled', autoRefreshEnabled);
+            applyToggleSetting('autoRefreshToggle', 'autoRefreshEnabled', v => { autoRefreshEnabled = v; });
             if (autoRefreshEnabled) autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
             updateAutoRefreshUI();
         }
 
         function onAutoRefreshIntervalChange() {
-            autoRefreshIntervalSeconds = parseInt(document.getElementById('autoRefreshIntervalSlider').value);
-            localStorage.setItem('autoRefreshIntervalSeconds', autoRefreshIntervalSeconds);
-            updateAutoRefreshIntervalLabel();
+            applySliderSetting('autoRefreshIntervalSlider', 'autoRefreshIntervalSeconds', v => { autoRefreshIntervalSeconds = v; }, updateAutoRefreshIntervalLabel);
             if (autoRefreshSecondsLeft > autoRefreshIntervalSeconds) {
                 autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
                 updateAutoRefreshUI();
