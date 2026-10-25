@@ -9,9 +9,9 @@
         body { background-color: #0e0e10; color: #efeff1; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
         .main-layout { display: flex; width: 100vw; height: 100vh; position: relative; }
 
-        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; z-index: 10; transition: none; position: relative; }
+        .sidebar { width: 320px; background-color: #18181b; border-right: 2px solid #26262b; z-index: 10; transition: margin-left 0.3s; position: relative; }
         .sidebar.collapsed { margin-left: -320px; }
-        .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: none; }
+        .right-sidebar { border-right: none; border-left: 2px solid #26262b; transition: margin-right 0.3s; }
         .right-sidebar.collapsed { margin-right: -320px; margin-left: 0; }
 
         .sidebar-content { display: flex; flex-direction: column; gap: 8px; padding: 15px; height: 100%; overflow: hidden; box-sizing: border-box; }
@@ -78,6 +78,11 @@
         .saved-channel .left-group { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
         .saved-channel .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; flex: 1; min-width: 0; }
         .stream-thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #000; cursor: pointer; }
+        .saved-check { color: #53fc18; font-weight: bold; font-size: 12px; flex-shrink: 0; }
+        .cat-viewers { color: #bbb; font-size: 12px; flex-shrink: 0; }
+        .green-tag { background: #1f8a35; color: #fff; font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+        .green-btn { background: #1f6f2c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+        .green-btn.on { background: #53fc18; color: #000; }
         .block-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
 
         #thumbPreview { position: fixed; right: 330px; width: 320px; height: 180px; border: 2px solid #9146ff; border-radius: 6px; overflow: hidden; z-index: 999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; background: #000; }
@@ -85,7 +90,6 @@
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: none; align-items: center; justify-content: center; }
         .modal-box { background: #18181b; border: 1px solid #26262b; border-radius: 8px; width: 380px; height: 560px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
-        .modal-box.wide { width: 820px; max-width: 95vw; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #26262b; font-weight: bold; font-size: 14px; flex-shrink: 0; }
         .modal-close-btn { background: transparent; border: none; color: #999; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
         .modal-close-btn:hover { color: #fff; }
@@ -104,9 +108,6 @@
         .grid-container { flex-grow: 1; display: grid; gap: 12px; padding: 12px; }
         .stream-slot { background: #1f1f23; border: 2px dashed #3a3a3d; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .stream-slot.active { border: 2px solid #26262b; }
-        .stream-slot.spotlight { border: 3px solid #f3c611; box-shadow: 0 0 24px rgba(243, 198, 17, 0.45); }
-        .stats-section-header { font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
-        .stats-platform-line { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
         .slot-controls { position: absolute; top: 5px; left: 5px; z-index: 20; display: none; gap: 5px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; align-items: center; }
         .stream-slot:hover .slot-controls { display: flex; }
         .drag-handle { background: #333; padding: 2px 8px; cursor: grab; color: white; border-radius: 4px; user-select: none; }
@@ -128,14 +129,23 @@
     <div id="blacklistModal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-header">
-                <span>Mustalla listalla olevat kanavat (<span id="blacklistCount">0</span>)</span>
+                <span><span id="listModalTitle">Blacklist</span> (<span id="blacklistCount">0</span>)</span>
                 <button class="modal-close-btn" onclick="closeBlacklistModal()">×</button>
             </div>
             <div class="modal-toolbar">
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="blacklistSearchInput" placeholder="Suodata nimellä..." autocomplete="off" oninput="renderBlacklistModal()" style="flex:1;">
-                    <button class="btn-sm" style="flex:none; width:auto; padding:8px 10px; font-size:12px;" onclick="addToBlacklistFromSearch()">Lisää listalle</button>
+                <div class="modal-sort-row">
+                    <button class="btn-sm" id="modeBtnBlack" style="font-size:12px; padding:5px;" onclick="setListModalMode('black')">Blacklist</button>
+                    <button class="btn-sm" id="modeBtnGreen" style="font-size:12px; padding:5px;" onclick="setListModalMode('green')">Greenlist</button>
                 </div>
+                <div id="greenAddRow" style="display:none; gap:6px;">
+                    <select id="greenPlatform" style="flex:none; width:auto;">
+                        <option value="twitch">Twitch</option>
+                        <option value="kick">Kick</option>
+                    </select>
+                    <input type="text" id="greenInput" placeholder="Lisää kanava greenlistille..." autocomplete="off" style="flex:1; min-width:0;" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addGreenFromModal(); }">
+                    <button class="btn-add" style="flex:none; padding:6px 12px;" onclick="addGreenFromModal()">Lisää</button>
+                </div>
+                <input type="text" id="blacklistSearchInput" placeholder="Suodata nimellä..." autocomplete="off" oninput="renderBlacklistModal()">
                 <div class="modal-sort-row">
                     <button class="btn-sm" id="sortBtnAlpha" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('alpha')">A-Ö</button>
                     <button class="btn-sm" id="sortBtnNewest" style="font-size:11px; padding:5px;" onclick="setBlacklistSort('newest')">Uusin</button>
@@ -143,35 +153,6 @@
                 </div>
             </div>
             <div id="blacklistList" class="modal-body"></div>
-        </div>
-    </div>
-
-    <div id="statsModal" class="modal-overlay">
-        <div class="modal-box wide">
-            <div class="modal-header">
-                <span style="display:flex; align-items:center; gap:10px;">Katselutilastot
-                    <button class="btn-sm" style="flex:none; padding:3px 10px; font-size:11px; background:#eb0400; color:#fff; font-weight:bold;" onclick="openResetConfirmModal()">Reset</button>
-                </span>
-                <button class="modal-close-btn" onclick="closeStatsModal()">×</button>
-            </div>
-            <div id="statsModalBody" class="modal-body"></div>
-        </div>
-    </div>
-
-    <div id="resetConfirmModal" class="modal-overlay">
-        <div class="modal-box" style="width:360px; height:auto;">
-            <div class="modal-header">
-                <span>Nollaa katselutilastot</span>
-                <button class="modal-close-btn" onclick="closeResetConfirmModal()">×</button>
-            </div>
-            <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
-                <div style="font-size:13px; color:#ccc;">Tämä poistaa KAIKKI katselutilastot pysyvästi. Kirjoita <strong>reset</strong> ja paina Vahvista.</div>
-                <input type="text" id="resetConfirmInput" placeholder="reset" autocomplete="off" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); confirmResetWatchStats(); }">
-                <div style="display:flex; gap:8px;">
-                    <button class="btn-sm" style="flex:1;" onclick="closeResetConfirmModal()">Peruuta</button>
-                    <button class="btn-danger" style="flex:1;" onclick="confirmResetWatchStats()">Vahvista</button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -184,14 +165,10 @@
                     <button id="btn-2" class="btn-sm" onclick="changeGridMode(2)">2x2</button>
                     <button id="btn-3" class="btn-sm" onclick="changeGridMode(3)">3x3</button>
                 </div>
-                <div class="btn-group">
-                    <button id="btn-4" class="btn-sm" onclick="changeGridMode(4)">4x4</button>
-                    <button id="btn-5" class="btn-sm" onclick="changeGridMode(5)">5x5</button>
-                    <button id="btn-roulette" class="btn-sm" onclick="changeGridMode('roulette')">Ruletti</button>
-                </div>
                 <div style="display: flex; gap: 5px; flex-shrink: 0;">
                     <button class="btn-danger" style="flex: 1;" onclick="clearAll()">Nollaa</button>
-                    <button class="btn-sm" style="flex: 1; background:#3a3a3d;" onclick="openBlacklistModal()">Blacklist</button>
+                    <button class="btn-sm" style="flex: 1; background:#3a3a3d;" onclick="openListModal('black')">Blacklist</button>
+                    <button class="btn-sm" style="flex: 1; background:#1f6f2c;" onclick="openListModal('green')">Greenlist</button>
                     <button class="btn-mute" style="flex: 1;" onclick="muteAll()">Mute All</button>
                 </div>
                 <div class="manual-add-box">
@@ -206,7 +183,7 @@
                     <div id="channelSuggestions" class="history-list"></div>
                 </div>
 
-                <div class="list-header"><span class="collapse-trigger" onclick="toggleActiveList()"><span id="activeListHeaderText">Aktiiviset striimit (1-9)</span> <span id="toggleIcon">▼</span></span></div>
+                <div class="list-header"><span class="collapse-trigger" onclick="toggleActiveList()">Aktiiviset striimit (1-9) <span id="toggleIcon">▼</span></span></div>
                 <div id="activeContent" class="list-scroll-box resizable"><div id="activeList"></div></div>
 
                 <div class="list-header"><span class="collapse-trigger" onclick="toggleCollapsible('twitchListWrap','twitchToggleIcon')">Tallennetut kanavat - Twitch <span id="twitchToggleIcon">▼</span></span></div>
@@ -230,18 +207,23 @@
                     <div class="manual-add-box">
                         <input type="password" id="twitchClientId" placeholder="Client-ID" autocomplete="off">
                         <input type="password" id="twitchToken" placeholder="Access Token" autocomplete="off">
-                        <button class="btn-add btn-twitch" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                        <input type="password" id="twitchClientSecret" placeholder="Client Secret (valinnainen: uusii tokenin itse)" autocomplete="off">
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-add btn-twitch" style="flex:1;" onclick="saveTwitchCreds()">Tallenna tunnukset</button>
+                            <button class="btn-sm" style="flex:1;" onclick="renewTwitchToken(true)">Hae uusi token</button>
+                        </div>
+                        <div id="tokenStatus" class="hint-text"></div>
                         <a class="hint-link" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">Luo Client-ID Twitchin kehittäjäkonsolissa →</a>
                     </div>
                 </div>
 
                 <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('liveStatusBody','liveStatusIcon')">Live-tilat <span id="liveStatusIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Täytä paikat automaattisesti: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla. Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Salli ruudukon koon ylitäyttö: vaatii Täytä paikat automaattisesti päällä. Jos tallennettuja, oikeassa kategoriassa livenä olevia kanavia on tarpeeksi täyttämään seuraava isompi ruudukkokoko kokonaan, vaihtaa ruudukon automaattisesti isommaksi ja täyttää uudet paikat (ohittaen 30 min jäähyn juuri kasvatetulle ruudukolle). Pienentää ruudukon myös automaattisesti takaisin, jos livenä olevien kanavien määrä myöhemmin tippuu. TOIMII VAIN tavallisissa 1x1-5x5-tiloissa - ei koskaan Ruletti-tilassa.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Arvo täytettävä striimi: kun päällä, tyhjään paikkaan valittava kanava arvotaan (jokaiselle ehdokkaalle satunnaisluku 1-yläraja, suurin voittaa, tasapelissä arvotaan uudelleen) sen sijaan että aina eniten katsojia omaava voittaisi suoraan - antaa pienemmillekin kanaville mahdollisuuden. Sama arvontamekaniikka ja yläraja-slideri koskee myös Ruletin valokeilan arvontaa.&#10;&#10;Ruletti - minuuttia per valokeila: koskee vain Ruletti-ruudukkotilaa (nappi ruudukkokokojen vieressä). Siirtyminen Ruletti-tilaan piilottaa sivupalkit automaattisesti, koska Twitch vaatii upotetulta playerilta vähintään 400x300px koon toistaakseen automaattisesti - suosittelemme myös F9-pikanäppäintä (piilottaa/näyttää sivupalkit milloin tahansa) yhdessä selaimen oman koko näyttö -tilan kanssa mahdollisimman suuren tilan saamiseksi. 12 pientä ruutua + 1 iso 2x2-valokeilaruutu keskellä. Tämän minuuttimäärän välein arvotaan uusi striimi valokeilaan; poistuva siirtyy viimeiselle sijalle. Jokainen pääsee valokeilaan vain kerran per kierros ennen kuin kaikki voivat taas voittaa.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.&#10;&#10;Laatuprofiilin pakotus pienille ruuduille: pakottaa Twitch-striimit valittuun laatuun (ei koske Kickiä). Jos valittu laatu ei ole saatavilla, käytetään lähintä ylempää, viimeisenä keinona Sourcea. Suositellaan päälle 4x4/5x5-ruudukoissa.&#10;&#10;Tilastot-nappi: näyttää katseluaikatilastot per kanava, alustoittain ja Twitch-kategorioittain.">?</button>
-                    <button class="btn-sm" style="flex:none; padding:4px 8px; font-size:11px; background:#3a3a3d;" onclick="openStatsModal()">Tilastot</button>
+                    <button type="button" class="help-btn" title="Päivittää automaattisesti myös auki olevan kategoriahaun tulokset ja Kick-kanavien tilan (kokeellinen, ei virallista API:a).&#10;&#10;Automaattinen täyttö: korvaa tyhjät tai offline-tilaan menneet paikat seuraavalla livenä olevalla tallennetulla kanavalla (eniten katsojia ensin). Itse suljettu kanava jätetään väliin ~30 minuutiksi ettei se palaa heti takaisin. Vaatii Automaattisen päivityksen päällä.&#10;&#10;Suosi vain haettuja kategorioita: automaattitäyttö valitsee UUDEKSI striimiksi vain kanavia joiden nykyinen peli täsmää VIHREÄKSI merkittyyn kategoriaan kategoriahistoriassa. Jos yhtään ei ole vihreänä, suodatinta ei sovelleta. Sulkee myös jo pyörivän striimin jos kategoria vaihtuu pois vihreästä.&#10;&#10;Sulje samankaltaiset Kick-kaksoiskappaleet: jos sama striimaaja on auki sekä Twitchissä että Kickissä hieman eri nimellä, sulkee Kick-version kun nimien samankaltaisuus ylittää kynnyksen.">?</button>
                     <button class="btn-sm btn-twitch" style="flex:none; padding:4px 8px; font-size:11px;" onclick="refreshTwitchLiveStatus()">Päivitä</button>
                 </div>
                 <div id="liveStatusBody">
+                    <div id="refreshStatus" class="hint-text"></div>
                     <div class="auto-refresh-row">
                         <label class="auto-refresh-toggle">
                             <input type="checkbox" id="autoRefreshToggle" checked onchange="onAutoRefreshToggleChange()">
@@ -268,38 +250,10 @@
                     </div>
                     <div class="auto-refresh-row">
                         <label class="auto-refresh-toggle">
-                            <input type="checkbox" id="gridOvershootToggle" onchange="onGridOvershootToggleChange()">
-                            <span class="toggle-slider"></span>
-                            <span>Salli ruudukon koon ylitäyttö</span>
-                        </label>
-                    </div>
-                    <div class="auto-refresh-row">
-                        <label class="auto-refresh-toggle">
                             <input type="checkbox" id="categoryFilterToggle" onchange="onCategoryFilterToggleChange()">
                             <span class="toggle-slider"></span>
                             <span>Suosi vain haettuja kategorioita</span>
                         </label>
-                    </div>
-                    <div class="auto-refresh-row">
-                        <label class="auto-refresh-toggle">
-                            <input type="checkbox" id="randomFillToggle" onchange="onRandomFillToggleChange()">
-                            <span class="toggle-slider"></span>
-                            <span>Arvo täytettävä striimi</span>
-                        </label>
-                    </div>
-                    <div class="slider-row">
-                        <div class="slider-row-label">
-                            <span>Arvonnan yläraja</span>
-                            <span id="randomFillMaxRollValue">1000</span>
-                        </div>
-                        <input type="range" id="randomFillMaxRollSlider" min="100" max="1000" value="1000" oninput="onRandomFillMaxRollChange()">
-                    </div>
-                    <div class="slider-row">
-                        <div class="slider-row-label">
-                            <span>Ruletti - minuuttia per valokeila</span>
-                            <span id="rouletteMinutesValue">3 min</span>
-                        </div>
-                        <input type="range" id="rouletteMinutesSlider" min="1" max="10" value="3" oninput="onRouletteMinutesChange()">
                     </div>
                     <div class="auto-refresh-row">
                         <label class="auto-refresh-toggle">
@@ -324,24 +278,6 @@
                         <input type="range" id="uptimeFilterSlider" min="6" max="30" value="30" oninput="onUptimeFilterChange()">
                     </div>
 
-                    <div class="auto-refresh-row">
-                        <label class="auto-refresh-toggle">
-                            <input type="checkbox" id="forceQualityToggle" onchange="onForceQualityToggleChange()">
-                            <span class="toggle-slider"></span>
-                            <span>Laatuprofiilin pakotus pienille ruuduille</span>
-                        </label>
-                    </div>
-                    <div class="slider-row">
-                        <div class="slider-row-label"><span>Pakotettu laatu</span></div>
-                        <select id="forceQualitySelect" onchange="onForceQualityLevelChange()" style="width:100%;">
-                            <option value="source">Source</option>
-                            <option value="1080p">1080p</option>
-                            <option value="720p">720p</option>
-                            <option value="480p">480p</option>
-                            <option value="360p">360p</option>
-                        </select>
-                    </div>
-
                     <div class="manual-add-box" style="padding:0; background:none; border:none;">
                         <button class="btn-sm" onclick="promptBannedWord()">Suodata otsikosta</button>
                         <div class="history-list" id="bannedWordsList"></div>
@@ -350,7 +286,7 @@
 
                 <div class="list-header">
                     <span class="collapse-trigger" onclick="toggleCollapsible('backupBody','backupIcon')">Asetusten varmuuskopiointi <span id="backupIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Sisältää mm. tallennetut kanavat ja Twitch-tunnukset selkokielisenä tiedostossa — säilytä tiedostoa varovasti äläkä jaa sitä muille.">?</button>
+                    <button type="button" class="help-btn" title="Sisältää mm. tallennetut kanavat, blacklistin, greenlistin sekä Twitch-tunnukset (myös Client Secretin) selkokielisenä tiedostossa — säilytä tiedostoa varovasti äläkä jaa sitä muille.">?</button>
                 </div>
                 <div id="backupBody">
                     <div class="manual-add-box">
@@ -363,8 +299,8 @@
                 </div>
 
                 <div class="list-header">
-                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa (Twitch) <span id="categorySearchIcon">▼</span></span>
-                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Vain Twitch: Kickillä ei ole julkista kategoriahakua ilman OAuth-kirjautumista, ja sen oma rajapinta on lisäksi CORS-lukittu vain kick.com-sivulle itselleen, joten sitä ei voi kutsua tästä työkalusta.">?</button>
+                    <span class="collapse-trigger" onclick="toggleCollapsible('categorySearchBody','categorySearchIcon')">Selaa kategoriaa <span id="categorySearchIcon">▼</span></span>
+                    <button type="button" class="help-btn" title="Pallo aiemmin haettujen kategorioiden edessä: harmaa = vain pikahaku (oletus kaikille uusille hauille), vihreä = huomioidaan automaattitäytössä ja striimin sulkevassa kategoriatarkistuksessa. Klikkaa palloa vaihtaaksesi tilaa.&#10;&#10;Tulokset: Twitch (T) ja kokeellisesti Kick (K) samassa listassa katsojamäärän mukaan, max 100, vähintään 5 katsojaa. Kickin kategoriahaku käyttää epävirallista osoitetta eikä välttämättä toimi - tilanne näkyy tuloslistan yläpuolella. ✓ = kanava on jo tallennettu. Green = greenlist: kanava ohittaa kategoriasuodattimen automaattitäytössä.">?</button>
                 </div>
                 <div id="categorySearchBody">
                     <div class="manual-add-box">
@@ -379,56 +315,10 @@
         </div>
     </div>
 
-    <script src="https://embed.twitch.tv/embed/v1.js"></script>
     <script>
-        const MAX_SLOTS = 25;
-        const VALID_GRID_MODES = [1, 2, 3, 4, 5];
-
-        // Ruletti: erikoistapaus, ei NxN-neliomuotoinen. 4x4-ruudukko jossa keskella oleva
-        // 2x2-alue on yhdistetty yhdeksi isoksi "valokeila"-ruuduksi (aito grid-column/row-
-        // span-levitys). HUOM: kokeilin talle myos CSS transform:scale()-pohjaista
-        // vaihtoehtoa (valttaen aidon layout-koon muutoksen kokonaan), mutta se osoittautui
-        // PAHEMMAKSI - striimit jumiutuivat heti eivatka vain satunnaisesti pitkan ajan
-        // jalkeen. Palattu takaisin aitoon resize-pohjaiseen versioon, jota tuetaan
-        // reassertMuteForPhysicalSlot/reassertPlaybackForPhysicalSlot-turvaverkoilla
-        // (ks. rotateRouletteSpotlight). Yhteensa 12 pientä + 1 iso = 13 kaytettavaa
-        // paikkaa. Visuaalinen paikka 6 = valokeila, paikka 12 = viimeinen.
-        const ROULETTE_LAYOUT = [
-            { col: '1 / 2', row: '1 / 2' }, // 0  ylin rivi 1
-            { col: '2 / 3', row: '1 / 2' }, // 1  ylin rivi 2
-            { col: '3 / 4', row: '1 / 2' }, // 2  ylin rivi 3
-            { col: '4 / 5', row: '1 / 2' }, // 3  ylin rivi 4
-            { col: '1 / 2', row: '2 / 3' }, // 4  vasen ylä
-            { col: '1 / 2', row: '3 / 4' }, // 5  vasen ala
-            { col: '2 / 4', row: '2 / 4' }, // 6  VALOKEILA (2x2)
-            { col: '4 / 5', row: '2 / 3' }, // 7  oikea ylä
-            { col: '4 / 5', row: '3 / 4' }, // 8  oikea ala
-            { col: '1 / 2', row: '4 / 5' }, // 9  alin rivi 1
-            { col: '2 / 3', row: '4 / 5' }, // 10 alin rivi 2
-            { col: '3 / 4', row: '4 / 5' }, // 11 alin rivi 3
-            { col: '4 / 5', row: '4 / 5' }  // 12 alin rivi 4 (VIIMEINEN sija)
-        ];
-        const ROULETTE_SLOT_COUNT = ROULETTE_LAYOUT.length;
-        const ROULETTE_SPOTLIGHT_VISUAL_POS = 6;
-        const ROULETTE_LAST_VISUAL_POS = 12;
-
-        let rouletteIntervalId = null;
-        // "plat:name" -avaimet jotka ovat jo olleet valokeilassa talla Ruletti-kierroksella.
-        let rouletteSpotlightHistory = new Set();
-        let rouletteMinutes = 3;
-        try {
-            const storedRm = parseInt(localStorage.getItem('rouletteMinutes'));
-            if (storedRm >= 1 && storedRm <= 10) rouletteMinutes = storedRm;
-        } catch (e) { rouletteMinutes = 3; }
-
-        const storedGridModeRaw = localStorage.getItem('gridMode');
-        let gridMode;
-        if (storedGridModeRaw === 'roulette') {
-            gridMode = 'roulette';
-        } else {
-            const storedGridMode = parseInt(storedGridModeRaw);
-            gridMode = VALID_GRID_MODES.includes(storedGridMode) ? storedGridMode : 3;
-        }
+        const VALID_GRID_MODES = [1, 2, 3];
+        const storedGridMode = parseInt(localStorage.getItem('gridMode'));
+        let gridMode = VALID_GRID_MODES.includes(storedGridMode) ? storedGridMode : 3;
 
         let savedChannels = [];
         try {
@@ -442,15 +332,14 @@
             lastClosedLiveAt: c.lastClosedLiveAt || 0,
             isLive: (typeof c.isLive === 'boolean') ? c.isLive : null,
             viewerCount: (typeof c.viewerCount === 'number') ? c.viewerCount : null,
-            gameName: (typeof c.gameName === 'string') ? c.gameName : null,
-            lastCheckedAt: (typeof c.lastCheckedAt === 'number') ? c.lastCheckedAt : 0
+            gameName: (typeof c.gameName === 'string') ? c.gameName : null
         }));
 
-        let twitchCreds = { clientId: '', token: '' };
+        let twitchCreds = { clientId: '', token: '', clientSecret: '', tokenExpiresAt: 0 };
         try {
             const rawCreds = JSON.parse(localStorage.getItem('twitchCreds'));
-            if (rawCreds) twitchCreds = rawCreds;
-        } catch (e) { twitchCreds = { clientId: '', token: '' }; }
+            if (rawCreds) twitchCreds = Object.assign({ clientId: '', token: '', clientSecret: '', tokenExpiresAt: 0 }, rawCreds);
+        } catch (e) { /* oletukset */ }
 
         let categoryHistory = [];
         try {
@@ -463,17 +352,36 @@
             }
         } catch (e) { categoryHistory = []; }
 
+        // Blacklist EI KOSKAAN vanhene. addedAt on vain "lisatty X min" -tekstia varten.
         let blacklist = [];
         try {
             const rawBl = JSON.parse(localStorage.getItem('blacklist'));
             if (Array.isArray(rawBl)) {
                 blacklist = rawBl.map(b => {
-                    if (typeof b === 'string') return { login: b, addedAt: Date.now() };
-                    return { login: b.login, addedAt: (typeof b.addedAt === 'number') ? b.addedAt : Date.now() };
-                });
+                    if (typeof b === 'string') return { login: b.toLowerCase(), addedAt: 0 };
+                    return { login: String(b.login || '').toLowerCase(), addedAt: (typeof b.addedAt === 'number') ? b.addedAt : 0 };
+                }).filter(b => b.login);
             }
         } catch (e) { blacklist = []; }
         let blacklistSortMode = 'alpha';
+        let listModalMode = 'black';
+
+        // Greenlist: immuuni kategoriasuodattimelle. Alustakohtainen.
+        let greenlist = [];
+        try {
+            const rawGl = JSON.parse(localStorage.getItem('greenlist'));
+            if (Array.isArray(rawGl)) {
+                greenlist = rawGl.map(g => ({
+                    login: String(g.login || '').toLowerCase(),
+                    plat: g.plat === 'kick' ? 'kick' : 'twitch',
+                    addedAt: (typeof g.addedAt === 'number') ? g.addedAt : 0
+                })).filter(g => g.login);
+            }
+        } catch (e) { greenlist = []; }
+
+        let categoryRows = null;      // viimeisin kategoriahaun raakadata
+        let categoryMsg = '';
+        let categoryStatusLine = '';
 
         let bannedTitleWords = [];
         try {
@@ -496,17 +404,15 @@
             if (storedDup >= 50 && storedDup <= 100) duplicateNameThreshold = storedDup;
         } catch (e) { duplicateNameThreshold = 80; }
 
-        let visualOrder = Array.from({ length: MAX_SLOTS }, (_, i) => i);
+        let visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         try {
             const storedOrder = JSON.parse(localStorage.getItem('visualOrder'));
-            if (Array.isArray(storedOrder) && storedOrder.length === MAX_SLOTS) {
+            if (Array.isArray(storedOrder) && storedOrder.length === 9) {
                 const asSet = new Set(storedOrder);
-                if (asSet.size === MAX_SLOTS && [...asSet].every(v => Number.isInteger(v) && v >= 0 && v < MAX_SLOTS)) {
+                if (asSet.size === 9 && [...asSet].every(v => Number.isInteger(v) && v >= 0 && v <= 8)) {
                     visualOrder = storedOrder;
                 }
             }
-            // Vanha, pienempi (esim. entinen 9 paikan) tallennettu jarjestys ei enaa tasmaa
-            // uuteen MAX_SLOTS-maaraan - talloin kaytetaan turvallisesti oletusjarjestysta.
         } catch (e) { /* pidetaan oletusjarjestys */ }
 
         let slots = [];
@@ -536,63 +442,6 @@
             categoryFilterEnabled = storedCF === null ? true : storedCF === 'true';
         } catch (e) { categoryFilterEnabled = true; }
 
-        let allowGridOvershoot = false;
-        try {
-            allowGridOvershoot = localStorage.getItem('allowGridOvershoot') === 'true';
-        } catch (e) { allowGridOvershoot = false; }
-
-        let randomFillEnabled = false;
-        try {
-            randomFillEnabled = localStorage.getItem('randomFillEnabled') === 'true';
-        } catch (e) { randomFillEnabled = false; }
-
-        let randomFillMaxRoll = 1000;
-        try {
-            const storedRoll = parseInt(localStorage.getItem('randomFillMaxRoll'));
-            if (storedRoll >= 100 && storedRoll <= 1000) randomFillMaxRoll = storedRoll;
-        } catch (e) { randomFillMaxRoll = 1000; }
-
-        // Katseluaikatilastot. watchStats: "plat:name" -> sekunteja yhteensa (persistoitu).
-        // categoryWatchStats: Twitch-kategorian nimi -> sekunteja yhteensa (persistoitu).
-        // activeWatchSessions: "plat:name" -> viimeisimman tarkistuspisteen aikaleima (ms),
-        // vain nyt aktiivisena olevalle kanavalle - ei persistoida, nollautuu sivun latauksessa
-        // (kesken oleva istunto ei siis lasketa mukaan jos sivu suljetaan kesken, paitsi
-        // beforeunload-kasittelijan flushin ansiosta jos selain ehtii sen ajaa).
-        let watchStats = {};
-        try {
-            const rawWatch = JSON.parse(localStorage.getItem('watchStats'));
-            if (rawWatch && typeof rawWatch === 'object') watchStats = rawWatch;
-        } catch (e) { watchStats = {}; }
-
-        let categoryWatchStats = {};
-        try {
-            const rawCatStats = JSON.parse(localStorage.getItem('categoryWatchStats'));
-            if (rawCatStats && typeof rawCatStats === 'object') categoryWatchStats = rawCatStats;
-        } catch (e) { categoryWatchStats = {}; }
-
-        let activeWatchSessions = {};
-        // Kaikki tallaisella hetkella jossain paikassa auki olevat kanavat, riippumatta
-        // siita onko sivu fokusoituna vai ei - kaytetaan focus/blur-tapahtumissa
-        // paivittamaan activeWatchSessions oikein.
-        let currentlyPlayingKeys = new Set();
-        let pageIsFocused = !document.hidden && document.hasFocus();
-
-        let forceQualityEnabled = false;
-        try {
-            forceQualityEnabled = localStorage.getItem('forceQualityEnabled') === 'true';
-        } catch (e) { forceQualityEnabled = false; }
-
-        const QUALITY_LEVELS = ['source', '1080p', '720p', '480p', '360p'];
-        let forceQualityLevel = '720p';
-        try {
-            const storedQ = localStorage.getItem('forceQualityLevel');
-            if (QUALITY_LEVELS.includes(storedQ)) forceQualityLevel = storedQ;
-        } catch (e) { forceQualityLevel = '720p'; }
-
-        // idx -> Twitch.Player-instanssi. Vain Twitch-slotit kayttavat taman - Kick kayttaa
-        // yha raakaa iframea, koska sille ei ole vastaavaa virallista embed-JS-SDK:ta.
-        let twitchPlayers = {};
-
         function persistSavedChannels() {
             localStorage.setItem('myChannels', JSON.stringify(savedChannels));
         }
@@ -603,55 +452,6 @@
 
         function getEnabledCategoryNames() {
             return categoryHistory.filter(h => h.enabled).map(h => h.name);
-        }
-
-        // ---------- Yleiskäyttöiset apufunktiot toggle/slider-asetuksille ----------
-        // Suurin osa asetuspaneelin kytkimistä/liukusäätimistä noudattaa samaa kaavaa:
-        // lue elementin arvo, tallenna muuttujaan + localStorageen, päivitä mahdollinen
-        // näyttöteksti. Nämä kaksi kapseloivat sen toiston - jokainen yksittäinen
-        // onXChange()-funktio pysyy nimettynä (HTML:n onchange-attribuutit eivät muutu),
-        // mutta sen runko kutsuu vain tätä.
-        function applyToggleSetting(checkboxId, storageKey, setter) {
-            const val = document.getElementById(checkboxId).checked;
-            setter(val);
-            localStorage.setItem(storageKey, val);
-            return val;
-        }
-
-        function applySliderSetting(inputId, storageKey, setter, labelUpdateFn, parseAsInt = true) {
-            const raw = document.getElementById(inputId).value;
-            const val = parseAsInt ? parseInt(raw) : raw;
-            setter(val);
-            localStorage.setItem(storageKey, val);
-            if (labelUpdateFn) labelUpdateFn();
-            return val;
-        }
-
-        // Tunnistaa "zombi"-kanavat: sellaiset joiden live-tieto EI ole onnistuneesti
-        // paivittynyt pitkaan aikaan (esim. Kickin haku on alkanut epaonnistua hiljaisesti
-        // juuri sille kanavalle). Ilman tata tunnistusta vanha "livena"-tieto voisi jaada
-        // ikuisesti voimaan vaikka striimi olisi jo paattynyt tunteja sitten - kanava
-        // nayttaisi vihreana loputtomiin eika koskaan poistuisi playerista automaattisesti.
-        // Kynnys on vahintaan 20 min TAI 5x paivitysvali, kumpi on suurempi.
-        function isChannelStatusStale(c) {
-            if (!c.lastCheckedAt) return false;
-            const threshold = Math.max(20 * 60 * 1000, autoRefreshIntervalSeconds * 1000 * 5);
-            return (Date.now() - c.lastCheckedAt) > threshold;
-        }
-
-        // Sulkee automaattisesti paikat joiden kanava on todettu offline-tilaan TAI joiden
-        // live-tieto on vanhentunut (ks. isChannelStatusStale). Tama estaa "musta ruutu joka
-        // ei koskaan poistu" -tilanteen. Toimii AINA, riippumatta Tayta paikat automaattisesti
-        // -asetuksesta, koska tama on pelkkaa siivousta eika uuden sisallon lisaamista.
-        function checkOfflineOrStaleEviction() {
-            slots.forEach((s, i) => {
-                if (!s.dataset.name) return;
-                const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
-                if (!entry) return;
-                if (entry.isLive === false || isChannelStatusStale(entry)) {
-                    clearSlot(i);
-                }
-            });
         }
 
         // ---------- Levenshtein-pohjainen nimien samankaltaisuus (0-100%) ----------
@@ -842,183 +642,88 @@
             document.getElementById('thumbPreview').style.display = 'none';
         }
 
-        // ---------- Ei-blokkaava ilmoitus (korvaa alert() lyhyissa infoviesteissa) ----------
-        // alert() pysayttaa koko sivun JS-suorituksen (ja sen mukana videon toiston) siihen
-        // asti kunnes kayttaja klikkaa OK - jos ikkuna jaa auki, kaikki striimit jaatyvat.
-        // showToast() ei blokkaa mitaan, joten striimit jatkavat pyorimista normaalisti.
-        function showToast(message) {
-            let container = document.getElementById('toastContainer');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'toastContainer';
-                container.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:5000; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none;';
-                document.body.appendChild(container);
-            }
-            const toast = document.createElement('div');
-            toast.textContent = message;
-            toast.style.cssText = 'background:#18181b; color:#efeff1; border:1px solid #3a3a3d; border-left:3px solid #9146ff; padding:10px 16px; border-radius:6px; font-size:13px; max-width:420px; box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:auto;';
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.transition = 'opacity 0.3s';
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4500);
-        }
-
-        // ---------- Katseluaikojen seuranta ----------
-
-        function persistWatchStats() {
-            localStorage.setItem('watchStats', JSON.stringify(watchStats));
-        }
-
-        function persistCategoryWatchStats() {
-            localStorage.setItem('categoryWatchStats', JSON.stringify(categoryWatchStats));
-        }
-
-        function formatWatchDuration(totalSeconds) {
-            totalSeconds = Math.max(0, Math.floor(totalSeconds));
-            const days = Math.floor(totalSeconds / 86400);
-            const hours = Math.floor((totalSeconds % 86400) / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-            const hh = String(hours).padStart(2, '0');
-            const mm = String(minutes).padStart(2, '0');
-            const ss = String(seconds).padStart(2, '0');
-            return days > 0 ? `${days}pv ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
-        }
-
-        function startWatchSession(plat, name) {
-            const key = plat + ':' + name.toLowerCase();
-            currentlyPlayingKeys.add(key);
-            if (pageIsFocused && !activeWatchSessions[key]) activeWatchSessions[key] = Date.now();
-        }
-
-        // Kirjaa kuluneen ajan istunnon alusta (tai edellisesta tarkistuspisteesta) talteen ja
-        // asettaa uuden tarkistuspisteen nykyhetkeen - kutsutaan seka periodisesti etta kun
-        // kanava suljetaan, jottei dataa katoa ajastimen valilla.
-        function flushWatchSession(key) {
-            if (!activeWatchSessions[key]) return;
-            const elapsedSec = (Date.now() - activeWatchSessions[key]) / 1000;
-            watchStats[key] = (watchStats[key] || 0) + elapsedSec;
-            activeWatchSessions[key] = Date.now();
-
-            const sep = key.indexOf(':');
-            const plat = key.slice(0, sep);
-            const name = key.slice(sep + 1);
-            if (plat === 'twitch') {
-                const entry = savedChannels.find(c => c.plat === 'twitch' && c.name.toLowerCase() === name);
-                const gameName = (entry && entry.gameName) ? entry.gameName : 'Tuntematon';
-                categoryWatchStats[gameName] = (categoryWatchStats[gameName] || 0) + elapsedSec;
-                persistCategoryWatchStats();
-            }
-            persistWatchStats();
-        }
-
-        function endWatchSession(plat, name) {
-            const key = plat + ':' + name.toLowerCase();
-            flushWatchSession(key);
-            delete activeWatchSessions[key];
-            currentlyPlayingKeys.delete(key);
-        }
-
-        function flushAllActiveSessions() {
-            Object.keys(activeWatchSessions).forEach(key => flushWatchSession(key));
-        }
-
-        // Sivu ei ole nakyvissa/fokusoituna: kirjataan kertynyt aika talteen ja pysaytetaan
-        // laskenta (tyhjennetaan tarkistuspisteet) - piilossa vietetty aika ei siis lasketa
-        // katseluajaksi.
-        function pauseAllWatchSessions() {
-            flushAllActiveSessions();
-            activeWatchSessions = {};
-            pageIsFocused = false;
-        }
-
-        // Sivu on taas nakyvissa/fokusoituna: asetetaan uusi tarkistuspiste kaikille
-        // parhaillaan auki oleville kanaville, jotta laskenta jatkuu tasta hetkesta.
-        function resumeAllWatchSessions() {
-            pageIsFocused = true;
-            currentlyPlayingKeys.forEach(key => {
-                activeWatchSessions[key] = Date.now();
-            });
-        }
-
-        // Ei-blokkaava vahvistusmodaali tilastojen nollaukselle - korvaa aiemman prompt()-
-        // pohjaisen version, koska prompt() (kuten alert()) pysayttaa koko sivun JS:n ja
-        // sen mukana videot siksi aikaa kun ikkuna on auki.
-        function openResetConfirmModal() {
-            const input = document.getElementById('resetConfirmInput');
-            input.value = '';
-            document.getElementById('resetConfirmModal').style.display = 'flex';
-            setTimeout(() => input.focus(), 0);
-        }
-
-        function closeResetConfirmModal() {
-            document.getElementById('resetConfirmModal').style.display = 'none';
-        }
-
-        function confirmResetWatchStats() {
-            const val = document.getElementById('resetConfirmInput').value.trim().toLowerCase();
-            closeResetConfirmModal();
-            if (val !== 'reset') {
-                showToast('Nollaus peruttu - kirjoitettu teksti ei tasmannyt.');
-                return;
-            }
-            watchStats = {};
-            categoryWatchStats = {};
-            activeWatchSessions = {};
-            if (pageIsFocused) {
-                currentlyPlayingKeys.forEach(key => { activeWatchSessions[key] = Date.now(); });
-            }
-            persistWatchStats();
-            persistCategoryWatchStats();
-            if (document.getElementById('statsModal').style.display === 'flex') renderStatsModal();
-            showToast('Katselutilastot nollattu.');
-        }
-
-        // ---------- Blacklist ----------
-        // HUOM: blacklist-merkinnat EIVAT vanhene/poistu koskaan automaattisesti.
-        // Ainoastaan modaalissa nakyva "lisatty X min Y sek" -ika-teksti lakkaa
-        // nakymasta 60 minuutin jalkeen (ks. formatBlacklistAge) - itse esto sailyy
-        // kunnes kayttaja poistaa sen manuaalisesti X-napista.
+        // ---------- Blacklist + Greenlist ----------
 
         function persistBlacklist() {
             localStorage.setItem('blacklist', JSON.stringify(blacklist));
         }
 
+        function persistGreenlist() {
+            localStorage.setItem('greenlist', JSON.stringify(greenlist));
+        }
+
+        function isGreenlisted(name, plat) {
+            const n = String(name || '').toLowerCase();
+            return greenlist.some(g => g.login === n && g.plat === plat);
+        }
+
+        function isModalOpen() {
+            return document.getElementById('blacklistModal').style.display === 'flex';
+        }
+
+        function refreshAfterListChange() {
+            renderSavedList();
+            if (isModalOpen()) renderBlacklistModal();
+        }
+
+        // Blokkaus: lisaa blacklistiin, poistaa greenlististä JA tallennetuista kanavista.
         function blockChannel(login) {
-            login = login.toLowerCase();
+            login = String(login).toLowerCase();
             if (!blacklist.some(b => b.login === login)) {
                 blacklist.push({ login, addedAt: Date.now() });
                 persistBlacklist();
             }
-            // Poista blokattu kanava myos tallennetuista kanavista - molemmilta
-            // alustoilta, koska sama striimaajanimi voi olla tallennettuna seka
-            // Twitchiin etta Kickiin.
-            const hadSaved = savedChannels.some(c => c.name.toLowerCase() === login);
-            if (hadSaved) {
-                savedChannels = savedChannels.filter(c => c.name.toLowerCase() !== login);
-                persistSavedChannels();
-                renderLists();
+            if (greenlist.some(g => g.login === login)) {
+                greenlist = greenlist.filter(g => g.login !== login);
+                persistGreenlist();
             }
+            const before = savedChannels.length;
+            savedChannels = savedChannels.filter(c => c.name.toLowerCase() !== login);
+            if (savedChannels.length !== before) persistSavedChannels();
+            refreshAfterListChange();
         }
 
         function unblockChannel(login) {
             blacklist = blacklist.filter(b => b.login !== login);
             persistBlacklist();
-            renderBlacklistModal();
+            refreshAfterListChange();
         }
 
-        function addToBlacklistFromSearch() {
-            const input = document.getElementById('blacklistSearchInput');
-            const name = input.value.trim().toLowerCase();
-            if (!name) {
-                showToast('Kirjoita ensin nimi "Suodata nimellä" -kenttään ennen listalle lisäämistä.');
-                return;
+        // Greenlist: lisaa myos tallennettuihin ja poistaa blacklististä.
+        function addGreenlist(login, plat) {
+            login = String(login || '').trim().toLowerCase();
+            if (!login) return;
+            plat = plat === 'kick' ? 'kick' : 'twitch';
+            if (blacklist.some(b => b.login === login)) {
+                blacklist = blacklist.filter(b => b.login !== login);
+                persistBlacklist();
             }
-            blockChannel(name);
+            if (!isGreenlisted(login, plat)) {
+                greenlist.push({ login, plat, addedAt: Date.now() });
+                persistGreenlist();
+            }
+            if (!savedChannels.find(c => c.name === login && c.plat === plat)) {
+                savedChannels.push({ name: login, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                persistSavedChannels();
+            }
+            refreshAfterListChange();
+            if (plat === 'twitch') refreshTwitchLiveStatus(true);
+            else refreshKickLiveStatus();
+        }
+
+        function removeGreenlist(login, plat) {
+            greenlist = greenlist.filter(g => !(g.login === login && g.plat === plat));
+            persistGreenlist();
+            refreshAfterListChange();
+        }
+
+        function addGreenFromModal() {
+            const input = document.getElementById('greenInput');
+            const plat = document.getElementById('greenPlatform').value;
+            const name = input.value.trim().toLowerCase();
+            if (!name) return;
+            addGreenlist(name, plat);
             input.value = '';
-            renderBlacklistModal();
         }
 
         function setBlacklistSort(mode) {
@@ -1026,7 +731,13 @@
             renderBlacklistModal();
         }
 
-        function openBlacklistModal() {
+        function setListModalMode(mode) {
+            listModalMode = mode === 'green' ? 'green' : 'black';
+            renderBlacklistModal();
+        }
+
+        function openListModal(mode) {
+            listModalMode = mode === 'green' ? 'green' : 'black';
             renderBlacklistModal();
             document.getElementById('blacklistModal').style.display = 'flex';
         }
@@ -1035,200 +746,39 @@
             document.getElementById('blacklistModal').style.display = 'none';
         }
 
-        // ---------- Tilastot-modaali ----------
-
-        function openStatsModal() {
-            renderStatsModal();
-            document.getElementById('statsModal').style.display = 'flex';
-        }
-
-        function closeStatsModal() {
-            document.getElementById('statsModal').style.display = 'none';
-        }
-
-        function buildCategoryPieChart(container) {
-            const entries = Object.entries(categoryWatchStats).sort((a, b) => b[1] - a[1]);
-            const top5 = entries.slice(0, 5);
-            const restTotal = entries.slice(5).reduce((sum, [, v]) => sum + v, 0);
-            const total = entries.reduce((sum, [, v]) => sum + v, 0);
-
-            if (total <= 0) {
-                const empty = document.createElement('div');
-                empty.style.cssText = 'color:#666; font-size:13px;';
-                empty.textContent = 'Ei vielä Twitch-kategoriadataa.';
-                container.appendChild(empty);
-                return;
-            }
-
-            const colors = ['#f3c611', '#eb0400', '#3ea6ff', '#ff8c42', '#e057a1', '#888888'];
-            const slices = [...top5];
-            if (restTotal > 0) slices.push(['Muut', restTotal]);
-
-            let cumulative = 0;
-            const gradientParts = slices.map(([, val], i) => {
-                const pct = (val / total) * 100;
-                const start = cumulative;
-                cumulative += pct;
-                return `${colors[i % colors.length]} ${start}% ${cumulative}%`;
-            });
-
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'display:flex; gap:20px; align-items:center; flex-wrap:wrap;';
-
-            const pie = document.createElement('div');
-            pie.style.cssText = `width:120px; height:120px; border-radius:50%; flex-shrink:0; background: conic-gradient(${gradientParts.join(', ')});`;
-            wrap.appendChild(pie);
-
-            const legend = document.createElement('div');
-            legend.style.cssText = 'display:flex; flex-direction:column; gap:6px; font-size:12px;';
-            slices.forEach(([name, val], i) => {
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex; align-items:center; gap:6px;';
-                const dot = document.createElement('span');
-                dot.style.cssText = `width:10px; height:10px; border-radius:2px; background:${colors[i % colors.length]}; flex-shrink:0;`;
-                row.appendChild(dot);
-                const label = document.createElement('span');
-                label.textContent = `${name} — ${formatWatchDuration(val)} (${((val / total) * 100).toFixed(1)}%)`;
-                row.appendChild(label);
-                legend.appendChild(row);
-            });
-            wrap.appendChild(legend);
-
-            container.appendChild(wrap);
-        }
-
-        function renderStatsModal() {
-            flushAllActiveSessions();
-            const body = document.getElementById('statsModalBody');
-            body.innerHTML = '';
-
-            const entries = Object.entries(watchStats)
-                .map(([key, seconds]) => {
-                    const sep = key.indexOf(':');
-                    return { plat: key.slice(0, sep), name: key.slice(sep + 1), seconds };
-                })
-                .filter(e => e.seconds > 0)
-                .sort((a, b) => b.seconds - a.seconds);
-
-            if (entries.length === 0) {
-                const empty = document.createElement('div');
-                empty.style.cssText = 'color:#666; font-size:13px;';
-                empty.textContent = 'Ei vielä katseludataa. Tilastot kertyvät kun striimejä on auki playerissa.';
-                body.appendChild(empty);
-                return;
-            }
-
-            const totalSeconds = entries.reduce((sum, e) => sum + e.seconds, 0);
-            const twitchSeconds = entries.filter(e => e.plat === 'twitch').reduce((sum, e) => sum + e.seconds, 0);
-            const kickSeconds = entries.filter(e => e.plat === 'kick').reduce((sum, e) => sum + e.seconds, 0);
-
-            // --- Yhteensa-osio + Twitch-kategoriat vierekkain samalla rivilla ---
-            const topRow = document.createElement('div');
-            topRow.style.cssText = 'display:flex; gap:16px; align-items:stretch; margin-bottom:20px; flex-wrap:wrap;';
-
-            const totalBox = document.createElement('div');
-            totalBox.style.cssText = 'flex:1; min-width:200px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b; display:flex; flex-direction:column; gap:8px;';
-            totalBox.innerHTML = `<div style="font-size:12px; color:#888; text-transform:uppercase;">Yhteensä katsottu</div>
-                <div style="font-size:22px; font-weight:bold;">${formatWatchDuration(totalSeconds)}</div>
-                <div class="stats-platform-line"><span class="platform-badge platform-twitch">T</span> Twitch: ${formatWatchDuration(twitchSeconds)}</div>
-                <div class="stats-platform-line"><span class="platform-badge platform-kick">K</span> Kick: ${formatWatchDuration(kickSeconds)}</div>`;
-            topRow.appendChild(totalBox);
-
-            const catBox = document.createElement('div');
-            catBox.style.cssText = 'flex:2; min-width:280px; padding:12px; background:#1f1f23; border-radius:6px; border:1px solid #26262b;';
-            const catHeader = document.createElement('div');
-            catHeader.className = 'stats-section-header';
-            catHeader.textContent = 'Twitch-kategoriat (top 5)';
-            catBox.appendChild(catHeader);
-            const catContainer = document.createElement('div');
-            catBox.appendChild(catContainer);
-            buildCategoryPieChart(catContainer);
-            topRow.appendChild(catBox);
-
-            body.appendChild(topRow);
-
-            // --- Top 10 pylvaina ---
-            const top10 = entries.slice(0, 10);
-            const maxSeconds = top10[0].seconds;
-
-            const barsHeader = document.createElement('div');
-            barsHeader.className = 'stats-section-header';
-            barsHeader.textContent = 'Top 10 katsotuinta';
-            body.appendChild(barsHeader);
-
-            const barsRow = document.createElement('div');
-            barsRow.style.cssText = 'display:flex; align-items:flex-end; gap:8px; height:190px; margin-bottom:24px; padding:0 4px;';
-            top10.forEach(e => {
-                const barCol = document.createElement('div');
-                barCol.style.cssText = 'display:flex; flex-direction:column; align-items:center; justify-content:flex-end; flex:1; height:100%; min-width:0;';
-
-                const valueLabel = document.createElement('div');
-                valueLabel.style.cssText = 'font-size:10px; color:#ccc; margin-bottom:4px; white-space:nowrap;';
-                valueLabel.textContent = formatWatchDuration(e.seconds);
-                barCol.appendChild(valueLabel);
-
-                const barHeightPx = Math.max(4, Math.round((e.seconds / maxSeconds) * 130));
-                const bar = document.createElement('div');
-                bar.style.cssText = `width:100%; height:${barHeightPx}px; background:${e.plat === 'twitch' ? '#9146ff' : '#53fc18'}; border-radius:4px 4px 0 0;`;
-                barCol.appendChild(bar);
-
-                const nameLabel = document.createElement('div');
-                nameLabel.style.cssText = 'font-size:10px; color:#ccc; margin-top:4px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;';
-                nameLabel.textContent = e.name;
-                barCol.appendChild(nameLabel);
-
-                barsRow.appendChild(barCol);
-            });
-            body.appendChild(barsRow);
-
-            // --- Loput listana, numeroituna ---
-            const rest = entries.slice(10);
-            if (rest.length > 0) {
-                const restHeader = document.createElement('div');
-                restHeader.className = 'stats-section-header';
-                restHeader.textContent = 'Muut katsotut kanavat';
-                body.appendChild(restHeader);
-
-                rest.forEach((e, i) => {
-                    const row = document.createElement('div');
-                    row.className = 'saved-channel';
-                    row.style.cursor = 'default';
-
-                    const left = document.createElement('span');
-                    left.className = 'left-group';
-                    const rankSpan = document.createElement('span');
-                    rankSpan.style.cssText = 'font-size:12px; color:#888; width:26px; flex-shrink:0;';
-                    rankSpan.textContent = (i + 11) + '.';
-                    left.appendChild(rankSpan);
-                    left.appendChild(createPlatformBadge(e.plat));
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'name-text';
-                    nameSpan.textContent = e.name;
-                    left.appendChild(nameSpan);
-                    row.appendChild(left);
-
-                    const durSpan = document.createElement('span');
-                    durSpan.style.cssText = 'font-size:12px; color:#ccc; flex-shrink:0;';
-                    durSpan.textContent = formatWatchDuration(e.seconds);
-                    row.appendChild(durSpan);
-
-                    body.appendChild(row);
-                });
-            }
-        }
-
+        // Ikateksti nakyy vain ensimmaisen tunnin; sen jalkeen vain nimi. Itse merkinta ei koskaan katoa.
         function formatBlacklistAge(addedAt) {
-            const elapsedMs = Date.now() - addedAt;
+            if (!addedAt || addedAt <= 0) return null;
+            const elapsedMs = Math.max(0, Date.now() - addedAt);
             const elapsedMin = Math.floor(elapsedMs / 60000);
             if (elapsedMin >= 60) return null;
             const sec = Math.floor((elapsedMs % 60000) / 1000);
             return `lisätty ${elapsedMin}min ${sec}sek`;
         }
 
+        // Paivittaa vain tekstit paikallaan (ei uudelleenrenderointia).
+        function updateListAges() {
+            document.querySelectorAll('#blacklistList .name-text[data-added]').forEach(el => {
+                const t = formatBlacklistAge(Number(el.dataset.added));
+                const label = el.dataset.label;
+                const wanted = t ? `${label} - ${t}` : label;
+                if (el.textContent !== wanted) el.textContent = wanted;
+            });
+        }
+
         function renderBlacklistModal() {
+            const isGreen = listModalMode === 'green';
+            const source = isGreen ? greenlist : blacklist;
             const box = document.getElementById('blacklistList');
             const countEl = document.getElementById('blacklistCount');
-            if (countEl) countEl.textContent = blacklist.length;
+            if (countEl) countEl.textContent = source.length;
+            document.getElementById('listModalTitle').textContent = isGreen
+                ? 'Greenlist (immuuni kategoriasuodattimelle)'
+                : 'Mustalla listalla olevat kanavat';
+            document.getElementById('greenAddRow').style.display = isGreen ? 'flex' : 'none';
+
+            ['modeBtnBlack', 'modeBtnGreen'].forEach(id => document.getElementById(id).classList.remove('sort-active'));
+            document.getElementById(isGreen ? 'modeBtnGreen' : 'modeBtnBlack').classList.add('sort-active');
 
             ['sortBtnAlpha', 'sortBtnNewest', 'sortBtnOldest'].forEach(id => document.getElementById(id).classList.remove('sort-active'));
             const activeBtnId = blacklistSortMode === 'alpha' ? 'sortBtnAlpha' : (blacklistSortMode === 'newest' ? 'sortBtnNewest' : 'sortBtnOldest');
@@ -1238,14 +788,14 @@
             const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
             box.innerHTML = '';
-            if (blacklist.length === 0) {
-                box.textContent = 'Musta lista on tyhja.';
+            if (source.length === 0) {
+                box.textContent = isGreen ? 'Greenlist on tyhjä.' : 'Musta lista on tyhjä.';
                 box.style.color = '#666';
                 box.style.fontSize = '13px';
                 return;
             }
 
-            let list = blacklist.filter(b => !query || b.login.includes(query));
+            let list = source.filter(b => !query || b.login.includes(query));
             if (blacklistSortMode === 'alpha') {
                 list = [...list].sort((a, b) => a.login.localeCompare(b.login));
             } else if (blacklistSortMode === 'newest') {
@@ -1255,7 +805,7 @@
             }
 
             if (list.length === 0) {
-                box.textContent = 'Ei hakua vastaavia nimia.';
+                box.textContent = 'Ei hakua vastaavia nimiä.';
                 box.style.color = '#666';
                 box.style.fontSize = '13px';
                 return;
@@ -1268,17 +818,27 @@
                 row.className = 'saved-channel';
                 row.style.cursor = 'default';
 
+                const left = document.createElement('span');
+                left.className = 'left-group';
+                if (isGreen) left.appendChild(createPlatformBadge(b.plat));
+
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
+                nameSpan.dataset.label = b.login;
+                nameSpan.dataset.added = String(b.addedAt || 0);
                 const ageText = formatBlacklistAge(b.addedAt);
                 nameSpan.textContent = ageText ? `${b.login} - ${ageText}` : b.login;
-                row.appendChild(nameSpan);
+                left.appendChild(nameSpan);
+                row.appendChild(left);
 
                 const btn = document.createElement('button');
                 btn.className = 'close-btn';
                 btn.textContent = 'X';
-                btn.title = 'Poista mustalta listalta';
-                btn.addEventListener('click', () => unblockChannel(b.login));
+                btn.title = isGreen ? 'Poista greenlistiltä' : 'Poista mustalta listalta';
+                btn.addEventListener('click', () => {
+                    if (isGreen) removeGreenlist(b.login, b.plat);
+                    else unblockChannel(b.login);
+                });
                 row.appendChild(btn);
 
                 box.appendChild(row);
@@ -1333,7 +893,9 @@
         // ---------- Suodattimet: lahetysaika, kaksoiskappaleet ----------
 
         function onUptimeFilterChange() {
-            applySliderSetting('uptimeFilterSlider', 'uptimeFilterHours', v => { uptimeFilterHours = v; }, updateUptimeFilterLabel);
+            uptimeFilterHours = parseInt(document.getElementById('uptimeFilterSlider').value);
+            localStorage.setItem('uptimeFilterHours', uptimeFilterHours);
+            updateUptimeFilterLabel();
         }
 
         function updateUptimeFilterLabel() {
@@ -1341,11 +903,14 @@
         }
 
         function onDuplicateCheckToggleChange() {
-            applyToggleSetting('duplicateCheckToggle', 'duplicateCheckEnabled', v => { duplicateCheckEnabled = v; });
+            duplicateCheckEnabled = document.getElementById('duplicateCheckToggle').checked;
+            localStorage.setItem('duplicateCheckEnabled', duplicateCheckEnabled);
         }
 
         function onDuplicateThresholdChange() {
-            applySliderSetting('duplicateThresholdSlider', 'duplicateNameThreshold', v => { duplicateNameThreshold = v; }, updateDuplicateThresholdLabel);
+            duplicateNameThreshold = parseInt(document.getElementById('duplicateThresholdSlider').value);
+            localStorage.setItem('duplicateNameThreshold', duplicateNameThreshold);
+            updateDuplicateThresholdLabel();
         }
 
         function updateDuplicateThresholdLabel() {
@@ -1422,7 +987,7 @@
         function toggleSavedFromPlayer(name, plat, btnEl) {
             const idx = savedChannels.findIndex(c => c.name === name && c.plat === plat);
             if (idx === -1) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null, lastCheckedAt: 0 });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
                 if (btnEl) btnEl.classList.add('favorited');
             } else {
                 savedChannels.splice(idx, 1);
@@ -1438,7 +1003,7 @@
             const container = document.getElementById('streamGrid');
             container.innerHTML = "";
             slots = [];
-            for (let i = 0; i < MAX_SLOTS; i++) {
+            for (let i = 0; i < 9; i++) {
                 const slot = document.createElement('div');
                 slot.className = 'stream-slot';
                 slot.id = 'slot-' + i;
@@ -1470,46 +1035,6 @@
             document.getElementById('toggleBtnRight').innerText = sb.classList.contains('collapsed') ? '◀' : '▶';
         }
 
-        // F9: piilottaa/nayttaa MOLEMMAT sivupalkit. HUOM: kaytettiin aiemmin F11:aa, mutta
-        // se aiheutti ristiriidan Firefoxin OMAN natiivin F11-koko naytto -toiminnon kanssa
-        // (molemmat sidottuna samaan nappaimeen -> esim. Ruletin automaattinen sivupalkkien
-        // piilotus + F11:n oma fullscreen-toggle alkoivat sotkea toisiaan). F9 on vapaa
-        // nappain jota selain ei kaytä mihinkaan, joten se on taysin oma, ristiriidaton
-        // pikanappain - F11:aa voi silti kayttaa normaalisti selaimen omaan tarkoitukseen
-        // rinnalla.
-        function toggleBothSidebars() {
-            const leftSb = document.getElementById('sidebar');
-            const rightSb = document.getElementById('rightSidebar');
-            const shouldHide = !leftSb.classList.contains('collapsed');
-            leftSb.classList.toggle('collapsed', shouldHide);
-            rightSb.classList.toggle('collapsed', shouldHide);
-            document.getElementById('toggleBtn').innerText = leftSb.classList.contains('collapsed') ? '▶' : '◀';
-            document.getElementById('toggleBtnRight').innerText = rightSb.classList.contains('collapsed') ? '◀' : '▶';
-        }
-
-        // Pakottaa molemmat sivupalkit piiloon (ei togglaa - ei avaa jos jo piilossa).
-        // Kaytetaan Ruletti-tilaan siirryttaessa, koska Ruletin pienet ruudut tarvitsevat
-        // Twitchin 400x300px-minimikoon tayttyakseen mahdollisimman paljon tilaa.
-        function hideBothSidebars() {
-            const leftSb = document.getElementById('sidebar');
-            const rightSb = document.getElementById('rightSidebar');
-            leftSb.classList.add('collapsed');
-            rightSb.classList.add('collapsed');
-            document.getElementById('toggleBtn').innerText = '▶';
-            document.getElementById('toggleBtnRight').innerText = '◀';
-        }
-
-        let lastF9ToggleAt = 0;
-        function handleF9Key(e) {
-            if (e.key !== 'F9') return;
-            const now = Date.now();
-            if (now - lastF9ToggleAt < 250) return;
-            lastF9ToggleAt = now;
-            toggleBothSidebars();
-        }
-        window.addEventListener('keydown', handleF9Key, true);
-        window.addEventListener('keyup', handleF9Key, true);
-
         // ---------- Listojen renderointi ----------
 
         function updateLists() {
@@ -1527,7 +1052,7 @@
             renderSavedList();
         }
 
-        // Jarjestys: 1) vihrea (livena + kategoria tasmaa, tai livena kun suodatinta ei kaytossa) - eniten katsojia ensin
+        // Jarjestys: 1) vihrea (livena + kategoria tasmaa / greenlist / ei suodatinta) - eniten katsojia ensin
         //            2) keltainen (livena, mutta eri kategoria) - eniten katsojia ensin
         //            3) harmaa (tila ei tiedossa) - aakkosjarjestys
         //            4) punainen (offline) - aakkosjarjestys
@@ -1535,7 +1060,8 @@
             const enabledCategories = getEnabledCategoryNames();
 
             function rank(c) {
-                if (c.isLive === true && !isChannelStatusStale(c)) {
+                if (c.isLive === true) {
+                    if (isGreenlisted(c.name, c.plat)) return 0;
                     if (enabledCategories.length === 0) return 0;
                     const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
                     return matches ? 0 : 1;
@@ -1547,18 +1073,12 @@
             return [...list].sort((a, b) => {
                 const ra = rank(a), rb = rank(b);
                 if (ra !== rb) return ra - rb;
-                if (ra === 0 || ra === 1) return (b.viewerCount || 0) - (a.viewerCount || 0);
+                if (ra === 0 || ra === 1) return (b.viewerCount || 0) - (a.viewerCount || 0) || a.name.localeCompare(b.name);
                 return a.name.localeCompare(b.name);
             });
         }
 
         function getDotStatus(c) {
-            if (c.isLive === true && isChannelStatusStale(c)) {
-                return {
-                    cls: 'unknown',
-                    title: 'Live-tieto on vanhentunut (ei ole paivittynyt viime aikoina) - nayta harmaana kunnes seuraava tarkistus onnistuu'
-                };
-            }
             if (c.isLive === null) {
                 return {
                     cls: 'unknown',
@@ -1569,6 +1089,9 @@
             }
             if (c.isLive === false) {
                 return { cls: 'offline', title: 'Ei livena' };
+            }
+            if (isGreenlisted(c.name, c.plat)) {
+                return { cls: 'live', title: 'Livena - greenlist (ohittaa kategoriasuodattimen)' + (c.gameName ? ` - ${c.gameName}` : '') };
             }
             const enabledCategories = getEnabledCategoryNames();
             if (enabledCategories.length > 0 && c.gameName) {
@@ -1586,6 +1109,7 @@
             const visible = savedChannels.filter(c => !activeKeys.includes(`${c.plat}:${c.name}`));
             renderSavedListForPlatform(visible.filter(c => c.plat === 'twitch'), 'channelListTwitch');
             renderSavedListForPlatform(visible.filter(c => c.plat === 'kick'), 'channelListKick');
+            renderCategoryResults();
         }
 
         function renderSavedListForPlatform(list, containerId) {
@@ -1607,6 +1131,14 @@
                 dot.className = 'status-dot ' + status.cls;
                 dot.title = status.title;
                 left.appendChild(dot);
+
+                if (isGreenlisted(c.name, c.plat)) {
+                    const g = document.createElement('span');
+                    g.className = 'green-tag';
+                    g.textContent = 'G';
+                    g.title = 'Greenlist';
+                    left.appendChild(g);
+                }
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
@@ -1651,17 +1183,12 @@
         }
 
         // ---------- Striimin lataus ----------
-        // Twitch-kanavat ladataan Twitchin virallisella Embed-JS-SDK:lla (Twitch.Player),
-        // koska se mahdollistaa laadun ohjelmallisen asettamisen (ks. "Laatuprofiilin
-        // pakotus" -asetus). Jos SDK ei jostain syysta ole latautunut (esim. skripti
-        // estetty verkosta), pudotaan takaisin vanhaan raakaan iframeen. Kick kayttaa
-        // aina raakaa iframea, koska sille ei ole vastaavaa virallista SDK:ta.
 
         function loadStreamIntoSlot(idx, name, plat) {
             idx = parseInt(idx);
-
-            if (twitchPlayers[idx]) delete twitchPlayers[idx];
-            startWatchSession(plat, name);
+            const url = plat === 'twitch'
+                ? `https://player.twitch.tv/?channel=${encodeURIComponent(name)}&parent=${window.location.hostname}&muted=true`
+                : `https://player.kick.com/${encodeURIComponent(name)}?muted=true`;
 
             slots[idx].dataset.name = name;
             slots[idx].dataset.plat = plat;
@@ -1670,183 +1197,41 @@
 
             const wrapper = document.createElement('div');
             wrapper.className = 'stream-wrapper';
+
             wrapper.appendChild(createStreamLabel(idx, name, plat));
+
+            const iframe = document.createElement('iframe');
+            iframe.src = url;
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+            iframe.setAttribute('allow', 'autoplay; encrypted-media');
+            iframe.setAttribute('referrerpolicy', 'no-referrer');
+            wrapper.appendChild(iframe);
+
             slots[idx].appendChild(wrapper);
             slots[idx].classList.add('active');
-
-            let usedTwitchSdk = false;
-
-            if (plat === 'twitch' && window.Twitch && window.Twitch.Player) {
-                try {
-                    const playerDiv = document.createElement('div');
-                    const playerId = 'twitch-player-slot-' + idx;
-                    playerDiv.id = playerId;
-                    playerDiv.style.width = '100%';
-                    playerDiv.style.height = '100%';
-                    wrapper.appendChild(playerDiv);
-
-                    const player = new Twitch.Player(playerId, {
-                        channel: name,
-                        parent: [window.location.hostname],
-                        muted: true,
-                        autoplay: true
-                    });
-                    twitchPlayers[idx] = player;
-                    player.addEventListener(Twitch.Player.READY, () => applyQualityToPlayer(idx));
-                    usedTwitchSdk = true;
-                } catch (e) {
-                    console.warn('Twitch.Player-alustus epaonnistui, kaytetaan raakaa iframea:', e.message);
-                    wrapper.innerHTML = '';
-                    wrapper.appendChild(createStreamLabel(idx, name, plat));
-                }
-            }
-
-            if (!usedTwitchSdk) {
-                const url = plat === 'twitch'
-                    ? `https://player.twitch.tv/?channel=${encodeURIComponent(name)}&parent=${window.location.hostname}&muted=true`
-                    : `https://player.kick.com/${encodeURIComponent(name)}?muted=true`;
-                const iframe = document.createElement('iframe');
-                iframe.src = url;
-                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
-                iframe.setAttribute('allow', 'autoplay; encrypted-media');
-                iframe.setAttribute('referrerpolicy', 'no-referrer');
-                wrapper.appendChild(iframe);
-            }
-
             updateLists();
-        }
-
-        // ---------- Laatuprofiilin pakotus (vain Twitch, Twitch.Player-SDK:n kautta) ----------
-
-        function pickAvailableQuality(qualities, desired) {
-            if (!Array.isArray(qualities) || qualities.length === 0) return null;
-            const desiredIdx = QUALITY_LEVELS.indexOf(desired);
-            const startIdx = desiredIdx === -1 ? 0 : desiredIdx;
-            for (let i = startIdx; i < QUALITY_LEVELS.length; i++) {
-                const label = QUALITY_LEVELS[i];
-                if (label === 'source') {
-                    const src = qualities.find(q => q.group === 'chunked' || q.name === 'chunked' || (q.name && q.name.toLowerCase().includes('source')));
-                    if (src) return src.group || src.name;
-                } else {
-                    const resNum = label.replace('p', '');
-                    const match = qualities.find(q => (q.name || '').includes(resNum));
-                    if (match) return match.group || match.name;
-                }
-            }
-            // Ei loytynyt mitaan halutun tasoista tai sen alapuolelta - kokeillaan viela
-            // Sourcea viimeisena keinona, muuten ei muuteta mitaan.
-            const fallbackSrc = qualities.find(q => q.group === 'chunked' || q.name === 'chunked');
-            return fallbackSrc ? (fallbackSrc.group || fallbackSrc.name) : null;
-        }
-
-        function applyQualityToPlayer(idx) {
-            if (!forceQualityEnabled) return;
-            const player = twitchPlayers[idx];
-            if (!player) return;
-            try {
-                const qualities = player.getQualities();
-                const picked = pickAvailableQuality(qualities, forceQualityLevel);
-                if (picked) player.setQuality(picked);
-            } catch (e) {
-                console.warn('Laadun pakotus epaonnistui slotille ' + idx + ':', e.message);
-            }
-        }
-
-        function reapplyQualityToAllPlayers() {
-            Object.keys(twitchPlayers).forEach(idx => applyQualityToPlayer(parseInt(idx)));
-        }
-
-        function onForceQualityToggleChange() {
-            applyToggleSetting('forceQualityToggle', 'forceQualityEnabled', v => { forceQualityEnabled = v; });
-            if (forceQualityEnabled) reapplyQualityToAllPlayers();
-        }
-
-        function onForceQualityLevelChange() {
-            applySliderSetting('forceQualitySelect', 'forceQualityLevel', v => { forceQualityLevel = v; }, null, false);
-            if (forceQualityEnabled) reapplyQualityToAllPlayers();
         }
 
         // ---------- Ruudukkokoko ----------
 
-        function getVisibleSlotCount() {
-            return gridMode === 'roulette' ? ROULETTE_SLOT_COUNT : gridMode * gridMode;
-        }
-
-        function gridModeLabel() {
-            return gridMode === 'roulette' ? 'Ruletti' : `${gridMode}x${gridMode}`;
-        }
-
         function updateGridDisplay() {
             const container = document.getElementById('streamGrid');
+            container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
+            container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
             document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
-            const activeBtn = document.getElementById('btn-' + gridMode);
-            if (activeBtn) activeBtn.classList.add('active');
-
-            if (gridMode === 'roulette') {
-                container.style.gridTemplateColumns = 'repeat(4, 1fr)';
-                container.style.gridTemplateRows = 'repeat(4, 1fr)';
-                slots.forEach((s, physicalIdx) => {
-                    const vp = getVisualPos(physicalIdx);
-                    if (vp < ROULETTE_SLOT_COUNT) {
-                        s.style.display = 'flex';
-                        s.style.gridColumn = ROULETTE_LAYOUT[vp].col;
-                        s.style.gridRow = ROULETTE_LAYOUT[vp].row;
-                        s.classList.toggle('spotlight', vp === ROULETTE_SPOTLIGHT_VISUAL_POS);
-                    } else {
-                        s.style.display = 'none';
-                        s.style.gridColumn = '';
-                        s.style.gridRow = '';
-                        s.classList.remove('spotlight');
-                    }
-                });
-            } else {
-                container.style.gridTemplateColumns = `repeat(${gridMode}, 1fr)`;
-                container.style.gridTemplateRows = `repeat(${gridMode}, 1fr)`;
-                slots.forEach((s, physicalIdx) => {
-                    const vp = getVisualPos(physicalIdx);
-                    s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
-                    s.style.gridColumn = '';
-                    s.style.gridRow = '';
-                    s.classList.remove('spotlight');
-                });
-            }
-            updateActiveListHeaderText();
-        }
-
-        function updateActiveListHeaderText() {
-            const el = document.getElementById('activeListHeaderText');
-            if (!el) return;
-            if (gridMode === 'roulette') {
-                el.textContent = `Aktiiviset striimit (Ruletti - ${ROULETTE_SLOT_COUNT})`;
-                return;
-            }
-            const max = gridMode * gridMode;
-            el.textContent = max === 1 ? 'Aktiiviset striimit (1)' : `Aktiiviset striimit (1-${max})`;
+            document.getElementById('btn-' + gridMode).classList.add('active');
+            slots.forEach((s, physicalIdx) => {
+                const vp = getVisualPos(physicalIdx);
+                s.style.display = vp < gridMode * gridMode ? 'flex' : 'none';
+            });
         }
 
         function changeGridMode(val) {
-            if (!VALID_GRID_MODES.includes(val) && val !== 'roulette') return;
-            const oldVisibleCount = getVisibleSlotCount();
+            if (!VALID_GRID_MODES.includes(val)) return;
+            const oldVisibleCount = gridMode * gridMode;
             gridMode = val;
             localStorage.setItem('gridMode', val);
-            const newVisibleCount = getVisibleSlotCount();
-
-            if (val === 'roulette') {
-                // Ruletin pienet ruudut tarvitsevat mahdollisimman paljon tilaa (Twitchin
-                // 400x300px-minimikoko autoplaylle) - piilotetaan sivupalkit automaattisesti.
-                hideBothSidebars();
-
-                // Kick ei ole mukana Ruletissa (raakaa iframe-embedia ei voi pakottaa
-                // jatkamaan resize-jumin jalkeen kuten Twitch-playeria voidaan) - poistetaan
-                // mahdolliset Kick-striimit jotka sattuvat olemaan nakyvilla rulettipaikoilla.
-                for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
-                    const physicalIdx = visualOrder[vp];
-                    if (slots[physicalIdx] && slots[physicalIdx].dataset.plat === 'kick') {
-                        clearSlot(physicalIdx);
-                    }
-                }
-            }
-
+            const newVisibleCount = gridMode * gridMode;
             updateGridDisplay();
 
             if (newVisibleCount > oldVisibleCount) {
@@ -1856,129 +1241,6 @@
                         loadStreamIntoSlot(physicalIdx, s.dataset.name, s.dataset.plat);
                     }
                 });
-            }
-            startOrStopRouletteTimer();
-        }
-
-        // ---------- Ruletti: valokeilan kierratys ----------
-
-        function startOrStopRouletteTimer() {
-            if (rouletteIntervalId) {
-                clearInterval(rouletteIntervalId);
-                rouletteIntervalId = null;
-            }
-            if (gridMode === 'roulette') {
-                rouletteSpotlightHistory = new Set();
-                rouletteIntervalId = setInterval(rotateRouletteSpotlight, rouletteMinutes * 60 * 1000);
-            }
-        }
-
-        function onRouletteMinutesChange() {
-            applySliderSetting('rouletteMinutesSlider', 'rouletteMinutes', v => { rouletteMinutes = v; }, updateRouletteMinutesLabel);
-            if (gridMode === 'roulette') startOrStopRouletteTimer();
-        }
-
-        function updateRouletteMinutesLabel() {
-            document.getElementById('rouletteMinutesValue').textContent = rouletteMinutes + ' min';
-        }
-
-        // Vaihtaa Ruletin valokeilassa olevan striimin. Arvonta kayttaa samaa nappaa-suurin-
-        // voittaa -mekaniikkaa (ja samaa yläraja-asetusta) kuin paikkojen automaattitaytto.
-        // Jokainen paasee valokeilaan vain kerran per kierros (rouletteSpotlightHistory) -
-        // kun kaikki muut ovat jo olleet vuorossa, kierros nollautuu. Valokeilasta poistuva
-        // siirtyy AINA viimeiselle sijalle (visuaalinen paikka 12).
-        function rotateRouletteSpotlight() {
-            if (gridMode !== 'roulette') return;
-
-            const spotlightPhysicalIdx = visualOrder[ROULETTE_SPOTLIGHT_VISUAL_POS];
-            const spotlightSlot = slots[spotlightPhysicalIdx];
-            const spotlightKey = (spotlightSlot && spotlightSlot.dataset.name)
-                ? spotlightSlot.dataset.plat + ':' + spotlightSlot.dataset.name.toLowerCase()
-                : null;
-            if (spotlightKey) rouletteSpotlightHistory.add(spotlightKey);
-
-            let candidates = [];
-            for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
-                if (vp === ROULETTE_SPOTLIGHT_VISUAL_POS) continue;
-                const physicalIdx = visualOrder[vp];
-                const slot = slots[physicalIdx];
-                if (!slot || !slot.dataset.name) continue;
-                if (slot.dataset.plat === 'kick') continue; // Kick ei ole mukana Ruletissa
-                const key = slot.dataset.plat + ':' + slot.dataset.name.toLowerCase();
-                if (!rouletteSpotlightHistory.has(key)) candidates.push(physicalIdx);
-            }
-
-            // Kaikki muut ovat jo olleet vuorossa - nollataan kierros (paitsi nykyinen
-            // valokeilassa oleva pysyy historiassa jottei se voi voittaa heti uudestaan).
-            if (candidates.length === 0) {
-                rouletteSpotlightHistory = new Set(spotlightKey ? [spotlightKey] : []);
-                for (let vp = 0; vp < ROULETTE_SLOT_COUNT; vp++) {
-                    if (vp === ROULETTE_SPOTLIGHT_VISUAL_POS) continue;
-                    const physicalIdx = visualOrder[vp];
-                    const slot = slots[physicalIdx];
-                    if (slot && slot.dataset.name && slot.dataset.plat !== 'kick') candidates.push(physicalIdx);
-                }
-            }
-
-            if (candidates.length === 0) return; // ei ketaan siirrettavaa
-
-            let pool = candidates.map(physicalIdx => ({ physicalIdx, roll: 1 + Math.floor(Math.random() * randomFillMaxRoll) }));
-            let maxRoll = Math.max(...pool.map(p => p.roll));
-            let tied = pool.filter(p => p.roll === maxRoll);
-            while (tied.length > 1) {
-                tied.forEach(p => { p.roll = 1 + Math.floor(Math.random() * randomFillMaxRoll); });
-                maxRoll = Math.max(...tied.map(p => p.roll));
-                tied = tied.filter(p => p.roll === maxRoll);
-            }
-            const winnerPhysicalIdx = tied[0].physicalIdx;
-            const winnerVisualPos = getVisualPos(winnerPhysicalIdx);
-            const lastPositionPhysicalIdx = visualOrder[ROULETTE_LAST_VISUAL_POS];
-
-            // Kaksi peräkkäistä TÄSMÄLLEEN samaa 2-way-vaihtoa kuin raahaus (drag&drop)
-            // käyttää (swapVisualOrderPositions) - ei koskaan lataa striimejä uudelleen:
-            // 1) voittaja <-> valokeila: voittaja nousee keskelle, entinen valokeilassa
-            //    ollut siirtyy voittajan vanhalle paikalle.
-            // 2) entinen valokeilassa ollut (nyt voittajan vanhalla paikalla) <-> viimeinen
-            //    sija: siirtää sen lopulliseen viimeiseen sijaan, ja viimeisella sijalla
-            //    ollut siirtyy voittajan vanhalle paikalle. Ohitetaan jos voittaja oli jo
-            //    valmiiksi viimeisella sijalla (silloin pelkka 1. vaihto riittaa).
-            swapVisualOrderPositions(winnerPhysicalIdx, spotlightPhysicalIdx);
-            if (winnerVisualPos !== ROULETTE_LAST_VISUAL_POS) {
-                swapVisualOrderPositions(spotlightPhysicalIdx, lastPositionPhysicalIdx);
-            }
-
-            applyVisualOrder();
-            updateGridDisplay();
-            updateSlotNumbering();
-            saveLayout();
-
-            // Twitch-playerit voidaan mykistaa uudelleen API:n kautta (ei uudelleenlatausta)
-            // sen varalta etta joku on klikannut aani paalle Twitchin omista ohjaimista
-            // silloin kun striimi oli iso valokeilaruutu.
-            reassertMuteForPhysicalSlot(winnerPhysicalIdx);
-            reassertMuteForPhysicalSlot(spotlightPhysicalIdx);
-
-            // Iso koon muutos (pieni <-> 2x2-valokeila) saa Twitch-playerin joskus jumiin
-            // yhteen kuvaan CSS-uudelleensijoituksesta huolimatta. Pakotetaan toisto
-            // uudelleen kaynnille pienella viiveella (annetaan resize-tapahtuman ensin
-            // ehtia kasitella) - ei lataa mitaan uudelleen, pelkka play()-komento.
-            setTimeout(() => {
-                reassertPlaybackForPhysicalSlot(winnerPhysicalIdx);
-                reassertPlaybackForPhysicalSlot(spotlightPhysicalIdx);
-            }, 150);
-        }
-
-        function reassertMuteForPhysicalSlot(physicalIdx) {
-            const player = twitchPlayers[physicalIdx];
-            if (player && typeof player.setMuted === 'function') {
-                try { player.setMuted(true); } catch (e) { /* ohitetaan hiljaa */ }
-            }
-        }
-
-        function reassertPlaybackForPhysicalSlot(physicalIdx) {
-            const player = twitchPlayers[physicalIdx];
-            if (player && typeof player.play === 'function') {
-                try { player.play(); } catch (e) { /* ohitetaan hiljaa */ }
             }
         }
 
@@ -1990,17 +1252,6 @@
         }
 
         // ---------- Raahaus: VAIN visuaalisen jarjestyksen vaihto, ei koskaan DOM-siirtoa ----------
-
-        // Yhteinen apufunktio: vaihtaa kahden FYYSISEN paikan visuaalisen sijainnin
-        // keskenaan. Taman kayttaa seka raahaus (drag&drop, alla) etta Ruletin arvonta -
-        // molemmat kayttavat siis TASMALLEEN samaa mekanismia. Ei koskaan lataa striimeja
-        // uudelleen, pelkka CSS-jarjestyksen (order / grid-column / grid-row) vaihto.
-        function swapVisualOrderPositions(physicalIdxA, physicalIdxB) {
-            const vpA = getVisualPos(physicalIdxA);
-            const vpB = getVisualPos(physicalIdxB);
-            visualOrder[vpA] = physicalIdxB;
-            visualOrder[vpB] = physicalIdxA;
-        }
 
         function drag(e, i) {
             e.dataTransfer.setData("src", i);
@@ -2024,96 +1275,67 @@
             const targetHasStream = !!slots[targetIdx].dataset.name;
             if (!srcHasStream && !targetHasStream) return;
 
-            swapVisualOrderPositions(srcIdx, targetIdx);
+            const srcVisualPos = getVisualPos(srcIdx);
+            const targetVisualPos = getVisualPos(targetIdx);
+            visualOrder[srcVisualPos] = targetIdx;
+            visualOrder[targetVisualPos] = srcIdx;
 
             applyVisualOrder();
             updateGridDisplay();
             updateSlotNumbering();
             saveLayout();
-
-            // Sama turvaverkko kuin Ruletin automaattisella arvonnalla: jos raahaus siirsi
-            // jommankumman Ruletin valokeilaan tai pois siita (iso koon muutos), varmistetaan
-            // etta Twitch-player pysyy mykistettyna ja jatkaa toistoa.
-            if (gridMode === 'roulette') {
-                reassertMuteForPhysicalSlot(srcIdx);
-                reassertMuteForPhysicalSlot(targetIdx);
-                setTimeout(() => {
-                    reassertPlaybackForPhysicalSlot(srcIdx);
-                    reassertPlaybackForPhysicalSlot(targetIdx);
-                }, 150);
-            }
         }
 
         // ---------- Kanavien lisays / poisto ----------
-
-        // Etsii ensimmaisen VAPAAN paikan nykyisen ruudukkokoon NAKYVISTA paikoista
-        // (visuaalisessa jarjestyksessa) - ei koskaan piilossa olevista taustapaikoista.
-        // Tama "lukitsee" manuaaliset lisaykset nykyiseen ruudukkokokoon: jos esim. 3x3
-        // on valittuna ja kaikki 9 nakyvaa paikkaa ovat taynna, lisays ei enaa mene
-        // piiloon 10. paikkaan asti - kayttajan pitaa vaihtaa isompaan ruudukkoon tai
-        // vapauttaa paikka. Automaattinen taytto/ylitaytto kayttaa omaa, erillista
-        // logiikkaansa (runAutoFill/evaluateGridOvershoot) eika tama vaikuta siihen.
-        function getFirstFreeVisibleSlotIndex() {
-            const visibleCount = getVisibleSlotCount();
-            for (let vp = 0; vp < visibleCount; vp++) {
-                const physicalIdx = visualOrder[vp];
-                if (!slots[physicalIdx].classList.contains('active')) return physicalIdx;
-            }
-            return -1;
-        }
 
         function processNewChannel() {
             const input = document.getElementById('channelInput');
             const name = input.value.trim().toLowerCase();
             const plat = document.getElementById('platform').value;
             if (!name) return;
-            if (gridMode === 'roulette' && plat === 'kick') {
-                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
-                return;
-            }
             if (!savedChannels.find(c => c.name === name && c.plat === plat)) {
-                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null, lastCheckedAt: 0 });
+                savedChannels.push({ name, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
                 persistSavedChannels();
             }
-            const freeIdx = getFirstFreeVisibleSlotIndex();
-            if (freeIdx !== -1) {
-                loadStreamIntoSlot(freeIdx, name, plat);
-                saveLayout();
+            let loaded = false;
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    loaded = true;
+                    break;
+                }
+            }
+            if (loaded) {
                 input.value = "";
                 document.getElementById('channelSuggestions').innerHTML = '';
             } else {
                 renderSavedList();
-                showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Kanava tallennettiin listaan, mutta sitä ei ladattu playeriin. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+                alert('Kaikki 9 paikkaa ovat kaytossa. Kanava tallennettiin listaan, mutta sita ei ladattu playeriin. Vapauta jokin paikka ensin.');
             }
         }
 
         function processNewChannelManual(name, plat) {
-            if (gridMode === 'roulette' && plat === 'kick') {
-                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
-                return false;
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    return true;
+                }
             }
-            const freeIdx = getFirstFreeVisibleSlotIndex();
-            if (freeIdx !== -1) {
-                loadStreamIntoSlot(freeIdx, name, plat);
-                saveLayout();
-                return true;
-            }
-            showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+            alert('Kaikki 9 paikkaa ovat kaytossa. Vapauta jokin paikka ensin.');
             return false;
         }
 
         function loadFromCategorySearch(name, plat) {
-            if (gridMode === 'roulette' && plat === 'kick') {
-                showToast('Kick ei ole mukana Ruletti-tilassa - vaihda ruudukko ensin tai valitse Twitch.');
-                return false;
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i].classList.contains('active')) {
+                    loadStreamIntoSlot(i, name, plat);
+                    saveLayout();
+                    return true;
+                }
             }
-            const freeIdx = getFirstFreeVisibleSlotIndex();
-            if (freeIdx !== -1) {
-                loadStreamIntoSlot(freeIdx, name, plat);
-                saveLayout();
-                return true;
-            }
-            showToast(`Kaikki ${gridModeLabel()}-ruudukon paikat ovat käytössä. Vaihda isompaan ruudukkoon tai vapauta jokin paikka.`);
+            alert('Kaikki 9 paikkaa ovat kaytossa. Vapauta jokin paikka ensin.');
             return false;
         }
 
@@ -2135,9 +1357,7 @@
                     entry.lastClosedLiveAt = Date.now();
                     persistSavedChannels();
                 }
-                endWatchSession(plat, name);
             }
-            if (twitchPlayers[i]) delete twitchPlayers[i];
             slots[i].innerHTML = '';
             slots[i].appendChild(buildEmptyControls(i));
             const freeBtn = document.createElement('button');
@@ -2152,7 +1372,7 @@
         function clearAll() {
             slots.forEach((s, i) => clearSlot(i));
             localStorage.removeItem('activeLayout');
-            visualOrder = Array.from({ length: MAX_SLOTS }, (_, i) => i);
+            visualOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
             applyVisualOrder();
             updateGridDisplay();
             saveLayout();
@@ -2160,29 +1380,7 @@
 
         // ---------- Automaattinen taytto + kategoriatarkistus ----------
 
-        // Valitsee taytettavaan paikkaan tulevan ehdokkaan. Oletuksena (randomFillEnabled
-        // pois paalta) eniten katsojia omaava voittaa kuten ennenkin. Paalla ollessa
-        // jokaiselle ehdokkaalle arvotaan luku 1-randomFillMaxRoll ja suurin voittaa -
-        // tasapelissa arvotaan uudelleen vain tasapelin osapuolille. Tama antaa
-        // pienemmillekin kanaville mahdollisuuden paasta ruudulle sen sijaan etta samat
-        // suurimmat kanavat valikoituisivat aina.
-        function pickFillCandidate(candidates) {
-            if (candidates.length === 0) return undefined;
-            if (!randomFillEnabled) {
-                return [...candidates].sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0))[0];
-            }
-            let pool = candidates.map(c => ({ c, roll: 1 + Math.floor(Math.random() * randomFillMaxRoll) }));
-            let maxRoll = Math.max(...pool.map(p => p.roll));
-            let tied = pool.filter(p => p.roll === maxRoll);
-            while (tied.length > 1) {
-                tied.forEach(p => { p.roll = 1 + Math.floor(Math.random() * randomFillMaxRoll); });
-                maxRoll = Math.max(...tied.map(p => p.roll));
-                tied = tied.filter(p => p.roll === maxRoll);
-            }
-            return tied[0].c;
-        }
-
-        function runAutoFill(ignoreCooldown = false) {
+        function runAutoFill() {
             const cooldownMs = 30 * 60 * 1000;
             const now = Date.now();
             const enabledCategories = getEnabledCategoryNames();
@@ -2194,7 +1392,7 @@
                 let isOfflineKnown = false;
                 if (!isEmpty) {
                     const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === s.dataset.plat);
-                    isOfflineKnown = !!(entry && (entry.isLive === false || isChannelStatusStale(entry)));
+                    isOfflineKnown = !!(entry && entry.isLive === false);
                 }
 
                 if (!isEmpty && !isOfflineKnown) return;
@@ -2205,18 +1403,17 @@
 
                 const candidates = savedChannels.filter(c => {
                     if (c.isLive !== true) return false;
-                    if (isChannelStatusStale(c)) return false;
-                    if (gridMode === 'roulette' && c.plat === 'kick') return false;
                     if (excludeKeys.includes(`${c.plat}:${c.name}`)) return false;
                     if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
-                    if (!ignoreCooldown && (now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
-                    if (categoryFilterEnabled && enabledCategories.length > 0) {
+                    if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
+                    if (categoryFilterEnabled && enabledCategories.length > 0 && !isGreenlisted(c.name, c.plat)) {
                         const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
                         if (!matches) return false;
                     }
                     return true;
                 });
-                const candidate = pickFillCandidate(candidates);
+                candidates.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
+                const candidate = candidates[0];
 
                 if (candidate) {
                     loadStreamIntoSlot(i, candidate.name, candidate.plat);
@@ -2234,6 +1431,7 @@
                 if (!s.dataset.name || s.dataset.plat !== 'twitch') return;
                 const entry = savedChannels.find(c => c.name === s.dataset.name && c.plat === 'twitch');
                 if (!entry || entry.isLive !== true || !entry.gameName) return;
+                if (isGreenlisted(entry.name, 'twitch')) return;
 
                 const matches = enabledCategories.some(h => h.toLowerCase() === entry.gameName.toLowerCase());
                 if (!matches) {
@@ -2243,89 +1441,133 @@
         }
 
         function onAutoFillToggleChange() {
-            applyToggleSetting('autoFillToggle', 'autoFillEnabled', v => { autoFillEnabled = v; });
+            autoFillEnabled = document.getElementById('autoFillToggle').checked;
+            localStorage.setItem('autoFillEnabled', autoFillEnabled);
             if (autoFillEnabled) {
                 refreshTwitchLiveStatus(true);
             }
         }
 
         function onCategoryFilterToggleChange() {
-            applyToggleSetting('categoryFilterToggle', 'categoryFilterEnabled', v => { categoryFilterEnabled = v; });
-        }
-
-        function onGridOvershootToggleChange() {
-            applyToggleSetting('gridOvershootToggle', 'allowGridOvershoot', v => { allowGridOvershoot = v; });
-            if (allowGridOvershoot) evaluateGridOvershoot();
-        }
-
-        function onRandomFillToggleChange() {
-            applyToggleSetting('randomFillToggle', 'randomFillEnabled', v => { randomFillEnabled = v; });
-        }
-
-        function onRandomFillMaxRollChange() {
-            applySliderSetting('randomFillMaxRollSlider', 'randomFillMaxRoll', v => { randomFillMaxRoll = v; }, updateRandomFillMaxRollLabel);
-        }
-
-        function updateRandomFillMaxRollLabel() {
-            document.getElementById('randomFillMaxRollValue').textContent = randomFillMaxRoll;
-        }
-
-        // Laskee kuinka monta tallennettua kanavaa on juuri nyt livena ja tayttaisi
-        // kategoriasuodattimen (jos kaytossa) - riippumatta siita ovatko ne jo auki
-        // vai eivat. Tama luku maarittaa "Salli ruudukon koon ylitaytto" -toiminnon
-        // kohdekoon: valitaan suurin ruudukko jonka tama maara riittaisi tayttamaan
-        // kokonaan.
-        function countAvailableLiveCandidates() {
-            const enabledCategories = getEnabledCategoryNames();
-            return savedChannels.filter(c => {
-                if (c.isLive !== true) return false;
-                if (isChannelStatusStale(c)) return false;
-                if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
-                if (categoryFilterEnabled && enabledCategories.length > 0) {
-                    const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
-                    if (!matches) return false;
-                }
-                return true;
-            }).length;
-        }
-
-        function evaluateGridOvershoot() {
-            // Ruletti on erikoistapaus (kiintea 13 paikan asettelu, ei NxN-neliomuotoinen) -
-            // ali/ylitaytto koskee vain tavallisia 1x1-5x5-tiloja, ei koskaan Ruletti-tilaa.
-            if (gridMode === 'roulette') return;
-            if (!autoFillEnabled || !allowGridOvershoot) return;
-            const availableCount = countAvailableLiveCandidates();
-            let bestSize = VALID_GRID_MODES[0];
-            VALID_GRID_MODES.forEach(size => {
-                if (availableCount >= size * size) bestSize = size;
-            });
-            if (bestSize !== gridMode) {
-                changeGridMode(bestSize);
-                runAutoFill(true);
-            }
+            categoryFilterEnabled = document.getElementById('categoryFilterToggle').checked;
+            localStorage.setItem('categoryFilterEnabled', categoryFilterEnabled);
         }
 
         // ---------- Twitch API: tunnukset, hakuhistoria, kategoriahaku, live-tilan paivitys ----------
 
-        function saveTwitchCreds() {
-            twitchCreds.clientId = document.getElementById('twitchClientId').value.trim();
-            twitchCreds.token = document.getElementById('twitchToken').value.trim();
+        function hasTwitchCreds() {
+            return !!(twitchCreds.clientId && (twitchCreds.token || twitchCreds.clientSecret));
+        }
+
+        function persistTwitchCreds() {
             localStorage.setItem('twitchCreds', JSON.stringify(twitchCreds));
-            showToast('Twitch-tunnukset tallennettu selaimen muistiin.');
+        }
+
+        function saveTwitchCreds() {
+            const newToken = document.getElementById('twitchToken').value.trim();
+            if (newToken !== twitchCreds.token) twitchCreds.tokenExpiresAt = 0;
+            twitchCreds.clientId = document.getElementById('twitchClientId').value.trim();
+            twitchCreds.token = newToken;
+            twitchCreds.clientSecret = document.getElementById('twitchClientSecret').value.trim();
+            persistTwitchCreds();
+            setTokenStatus('Tunnukset tallennettu.', false);
+            alert('Twitch-tunnukset tallennettu selaimen muistiin.');
+        }
+
+        function setTokenStatus(msg, isBad) {
+            const el = document.getElementById('tokenStatus');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = isBad ? '#ff6b6b' : '#7bd88f';
+        }
+
+        function describeTokenExpiry() {
+            if (!twitchCreds.tokenExpiresAt) return '';
+            const days = Math.round((twitchCreds.tokenExpiresAt - Date.now()) / 86400000);
+            return days >= 0 ? ` (vanhenee n. ${days} pv päästä)` : ' (vanhentunut)';
+        }
+
+        // Hakee uuden app access tokenin client credentials -tunnuksilla (vaatii Client Secretin).
+        // Huom: jos selain estaa pyynnon (CORS), tama epaonnistuu - tama nakyy tilarivilla.
+        async function renewTwitchToken(manual = false) {
+            if (!twitchCreds.clientId || !twitchCreds.clientSecret) {
+                if (manual) alert('Lisää ensin Client-ID ja Client Secret ja paina Tallenna tunnukset.');
+                else setTokenStatus('Token ei toimi eikä automaattista uusintaa voi tehdä: Client Secret puuttuu.', true);
+                return false;
+            }
+            try {
+                const body = new URLSearchParams({
+                    client_id: twitchCreds.clientId,
+                    client_secret: twitchCreds.clientSecret,
+                    grant_type: 'client_credentials'
+                });
+                const res = await fetch('https://id.twitch.tv/oauth2/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (!data.access_token) throw new Error('vastauksessa ei ollut tokenia');
+                twitchCreds.token = data.access_token;
+                twitchCreds.tokenExpiresAt = Date.now() + (Number(data.expires_in) || 0) * 1000;
+                persistTwitchCreds();
+                const tokenInput = document.getElementById('twitchToken');
+                if (tokenInput) tokenInput.value = twitchCreds.token;
+                setTokenStatus('Uusi token haettu ✓' + describeTokenExpiry(), false);
+                return true;
+            } catch (err) {
+                setTokenStatus('Tokenin haku epäonnistui: ' + err.message + '. Hae token käsin (ohje) ja liitä se kenttään.', true);
+                if (manual) alert('Tokenin haku epäonnistui: ' + err.message);
+                return false;
+            }
+        }
+
+        // Kaikki Twitch-kutsut kulkevat tan kautta: 401 -> yritetaan uusia token ja toistetaan kerran.
+        async function twitchFetch(url) {
+            if (!twitchCreds.token && twitchCreds.clientSecret) await renewTwitchToken();
+            const doFetch = () => fetch(url, {
+                headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
+            });
+            let res = await doFetch();
+            if (res.status === 401) {
+                const renewed = await renewTwitchToken();
+                if (renewed) res = await doFetch();
+                else if (twitchCreds.clientSecret === '') setTokenStatus('Token vanhentunut tai virheellinen (HTTP 401). Hae uusi token ja liitä se kenttään.', true);
+            }
+            if (res.ok) setTokenStatus('Token toimii ✓' + describeTokenExpiry(), false);
+            return res;
+        }
+
+        function setRefreshStatus(msg, isBad) {
+            const el = document.getElementById('refreshStatus');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = isBad ? '#ff6b6b' : '#7bd88f';
+        }
+
+        function timeNowText() {
+            return new Date().toLocaleTimeString('fi-FI');
         }
 
         function addToCategoryHistory(term) {
             const clean = term.trim();
             if (!clean) return;
-            // Sailyta olemassa olevan haun "kaytossa automaattitaytossa" -tila (vihrea pallo),
-            // vaikka sama kategoria haetaan uudelleen. Aiemmin tama nollasi tilan pois paalta
-            // (harmaaksi) joka kerta kun jo listalla ollutta kategoriaa haettiin uudelleen -
-            // esim. klikkaamalla vanhaa hakua ja painamalla "Hae livenä olevat" uudestaan.
+            // Jos kategoria on jo historiassa, sen vihrea/harmaa tila SAILYY - se vain siirtyy kärkeen.
             const existing = categoryHistory.find(h => h.name.toLowerCase() === clean.toLowerCase());
-            const wasEnabled = existing ? existing.enabled : false;
+            const keepEnabled = existing ? existing.enabled : false;
+            const keepName = existing ? existing.name : clean;
             categoryHistory = categoryHistory.filter(h => h.name.toLowerCase() !== clean.toLowerCase());
-            categoryHistory.unshift({ name: clean, enabled: wasEnabled });
-            if (categoryHistory.length > 15) categoryHistory = categoryHistory.slice(0, 15);
+            categoryHistory.unshift({ name: keepName, enabled: keepEnabled });
+            // Rajan ylittyessa pudotetaan ensin harmaat (ei kaytossa), vihreat vasta viimeisena.
+            while (categoryHistory.length > 15) {
+                let idx = -1;
+                for (let i = categoryHistory.length - 1; i > 0; i--) {
+                    if (!categoryHistory[i].enabled) { idx = i; break; }
+                }
+                if (idx === -1) idx = categoryHistory.length - 1;
+                categoryHistory.splice(idx, 1);
+            }
             persistCategoryHistory();
             renderCategoryHistory();
         }
@@ -2379,64 +1621,105 @@
             });
         }
 
-        // Rakentaa yhden kategoriahaun tulosrivin (kayttaa seka Twitch- etta Kick-tulokset).
-        function buildCategoryResultItem({ plat, login, displayName, viewerCount, smallThumbUrl, bigThumbUrl, linkUrl }) {
-            const item = document.createElement('div');
-            item.className = 'saved-channel';
-            item.style.cursor = 'default';
+        // ---------- Kategoriahaku (Twitch + kokeellinen Kick) ----------
 
-            const linkArea = document.createElement('a');
-            linkArea.className = 'left-group';
-            linkArea.href = linkUrl;
-            linkArea.target = '_blank';
-            linkArea.rel = 'noopener noreferrer';
-            linkArea.style.cursor = 'pointer';
-            linkArea.addEventListener('click', (e) => {
-                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                    e.preventDefault();
-                    const loaded = loadFromCategorySearch(login, plat);
-                    if (loaded) item.remove();
-                }
-            });
+        async function fetchTwitchCategoryRows(query) {
+            const gameRes = await twitchFetch(`https://api.twitch.tv/helix/games?name=${encodeURIComponent(query)}`);
+            if (!gameRes.ok) throw new Error('Kategoriahaku epäonnistui (HTTP ' + gameRes.status + ')');
+            const gameData = await gameRes.json();
+            if (!gameData.data || gameData.data.length === 0) {
+                throw new Error('Kategoriaa ei löytynyt Twitchistä (tarkka nimi, esim. "Just Chatting")');
+            }
+            const gameId = gameData.data[0].id;
 
-            if (smallThumbUrl) {
-                const thumb = document.createElement('img');
-                thumb.className = 'stream-thumb';
-                thumb.src = smallThumbUrl;
-                thumb.alt = '';
-                thumb.loading = 'lazy';
-                if (bigThumbUrl) {
-                    thumb.addEventListener('mouseenter', (e) => showThumbPreview(e, bigThumbUrl));
-                    thumb.addEventListener('mouseleave', hideThumbPreview);
+            // Twitch palauttaa striimit katsojamaaran mukaan laskevasti, max 100 / sivu.
+            // Haetaan sivuja kunnes katsojat < 5 tai sivut loppuvat.
+            const all = [];
+            let after = '';
+            for (let page = 0; page < 10; page++) {
+                const url = `https://api.twitch.tv/helix/streams?game_id=${gameId}&first=100` + (after ? `&after=${encodeURIComponent(after)}` : '');
+                const res = await twitchFetch(url);
+                if (!res.ok) {
+                    if (page === 0) throw new Error('Striimihaku epäonnistui (HTTP ' + res.status + ')');
+                    break;
                 }
-                linkArea.appendChild(thumb);
+                const data = await res.json();
+                const arr = data.data || [];
+                all.push(...arr);
+                after = data.pagination && data.pagination.cursor;
+                if (!after || arr.length === 0) break;
+                if (arr[arr.length - 1].viewer_count < 5) break;
             }
 
-            linkArea.appendChild(createPlatformBadge(plat));
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'name-text';
-            nameSpan.textContent = `${displayName} (${(viewerCount || 0).toLocaleString('fi-FI')})`;
-            linkArea.appendChild(nameSpan);
-
-            item.appendChild(linkArea);
-
-            const blockBtn = document.createElement('button');
-            blockBtn.className = 'block-btn';
-            blockBtn.textContent = 'Block';
-            blockBtn.title = 'Esta tama kanava nakymasta hakutuloksissa';
-            blockBtn.addEventListener('click', () => {
-                blockChannel(login);
-                item.remove();
+            const cacheBuster = Date.now();
+            return all.filter(s => s.viewer_count >= 5).map(s => {
+                const base = s.thumbnail_url || '';
+                return {
+                    plat: 'twitch',
+                    login: s.user_login.toLowerCase(),
+                    display: s.user_name,
+                    viewers: s.viewer_count,
+                    title: s.title || '',
+                    startedMs: new Date(s.started_at).getTime(),
+                    thumbSmall: base.replace('{width}', '80').replace('{height}', '45') + `?t=${cacheBuster}`,
+                    thumbBig: base.replace('{width}', '320').replace('{height}', '180') + `?t=${cacheBuster}`,
+                    url: `https://www.twitch.tv/${s.user_login.toLowerCase()}`
+                };
             });
-            item.appendChild(blockBtn);
+        }
 
-            return item;
+        function mapKickLivestream(it) {
+            if (!it || typeof it !== 'object') return null;
+            const ch = it.channel || {};
+            const login = String(ch.slug || it.slug || (ch.user && ch.user.username) || '').toLowerCase();
+            if (!login) return null;
+            const vRaw = it.viewer_count ?? it.viewers ?? it.view_count;
+            const viewers = (typeof vRaw === 'number') ? vRaw : 0;
+            let thumb = '';
+            if (typeof it.thumbnail === 'string') thumb = it.thumbnail;
+            else if (it.thumbnail && typeof it.thumbnail === 'object') thumb = it.thumbnail.src || it.thumbnail.url || '';
+            const started = Date.parse(it.start_time || it.created_at || '');
+            return {
+                plat: 'kick',
+                login,
+                display: (ch.user && ch.user.username) || ch.slug || it.slug || login,
+                viewers,
+                title: it.session_title || it.title || '',
+                startedMs: isNaN(started) ? null : started,
+                thumbSmall: thumb,
+                thumbBig: thumb,
+                url: `https://kick.com/${login}`
+            };
+        }
+
+        // KOKEELLINEN: Kickin kategoriahaulle ei ole varmistettua julkista osoitetta. Kokeillaan
+        // muutamaa tunnettua epavirallista osoitetta; jos yksikaan ei vastaa, palautetaan null.
+        async function fetchKickCategoryRows(query) {
+            const slug = query.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            if (!slug) return null;
+            const urls = [
+                `https://kick.com/stream/livestreams/en?page=1&limit=100&subcategory=${encodeURIComponent(slug)}&sort=desc`,
+                `https://kick.com/api/v2/categories/${encodeURIComponent(slug)}/livestreams?limit=100&sort=viewer_count_desc`,
+                `https://kick.com/api/v1/subcategories/${encodeURIComponent(slug)}/livestreams?limit=100`
+            ];
+            for (const u of urls) {
+                try {
+                    const res = await fetch(u, { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) continue;
+                    const d = await res.json();
+                    let arr = null;
+                    if (Array.isArray(d)) arr = d;
+                    else if (d && Array.isArray(d.data)) arr = d.data;
+                    else if (d && d.data && Array.isArray(d.data.livestreams)) arr = d.data.livestreams;
+                    else if (d && Array.isArray(d.livestreams)) arr = d.livestreams;
+                    if (!arr) continue;
+                    return arr.map(mapKickLivestream).filter(r => r && r.viewers >= 5);
+                } catch (e) { /* CORS / verkkovirhe -> seuraava osoite */ }
+            }
+            return null;
         }
 
         async function searchTwitchCategory(auto = false) {
-            const resultsBox = document.getElementById('categoryResults');
-
             let query;
             if (auto) {
                 query = lastCategoryQuery;
@@ -2446,95 +1729,153 @@
                 if (!query) return;
                 addToCategoryHistory(query);
                 lastCategoryQuery = query;
-                resultsBox.textContent = 'Haetaan...';
+                categoryMsg = 'Haetaan...';
+                renderCategoryResults();
             }
 
-            const hasTwitchCreds = !!(twitchCreds.clientId && twitchCreds.token);
-
-            let twitchResults = [];
-            let twitchError = null;
-
-            if (hasTwitchCreds) {
-                try {
-                    const gameRes = await fetch(`https://api.twitch.tv/helix/games?name=${encodeURIComponent(query)}`, {
-                        headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
-                    });
-                    if (!gameRes.ok) throw new Error('Kategoriahaku epaonnistui (HTTP ' + gameRes.status + ')');
-                    const gameData = await gameRes.json();
-                    if (gameData.data && gameData.data.length > 0) {
-                        const gameId = gameData.data[0].id;
-                        const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?game_id=${gameId}&first=30`, {
-                            headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
-                        });
-                        if (!streamsRes.ok) throw new Error('Striimihaku epaonnistui (HTTP ' + streamsRes.status + ')');
-                        const streamsData = await streamsRes.json();
-
-                        // VAIN Twitch-slotit huomioidaan tassa: sama nimi Kickissa ei saa piilottaa
-                        // eri alustan Twitch-tulosta.
-                        const activeTwitchLogins = slots
-                            .filter(s => s.dataset.plat === 'twitch' && s.dataset.name)
-                            .map(s => s.dataset.name.toLowerCase());
-                        const nowMs = Date.now();
-
-                        twitchResults = (streamsData.data || []).filter(s => {
-                            if (s.viewer_count < 5) return false;
-                            const login = s.user_login.toLowerCase();
-                            if (activeTwitchLogins.includes(login)) return false;
-                            if (blacklist.some(b => b.login === login)) return false;
-                            const startedMs = new Date(s.started_at).getTime();
-                            const hoursLive = (nowMs - startedMs) / (1000 * 60 * 60);
-                            if (hoursLive > uptimeFilterHours) return false;
-                            if (bannedTitleWords.some(w => s.title && s.title.toLowerCase().includes(w.toLowerCase()))) return false;
-                            return true;
-                        });
-                    }
-                } catch (err) {
-                    twitchError = err.message;
-                }
+            let twRows = [], twErr = '', kickRows = null;
+            if (hasTwitchCreds()) {
+                try { twRows = await fetchTwitchCategoryRows(query); }
+                catch (err) { twErr = err.message; }
+            } else {
+                twErr = 'Twitch-tunnukset puuttuvat';
             }
+            try { kickRows = await fetchKickCategoryRows(query); } catch (e) { kickRows = null; }
 
-            resultsBox.innerHTML = '';
-
-            if (twitchResults.length === 0) {
-                if (!auto) {
-                    if (twitchError) {
-                        resultsBox.textContent = 'Virhe: ' + twitchError + ' (tarkista Client-ID/Token).';
-                    } else if (!hasTwitchCreds) {
-                        resultsBox.textContent = 'Lisaa ensin Twitchin Client-ID ja Access Token ylapuolelle.';
-                    } else {
-                        resultsBox.textContent = 'Ei suodattimet lapaisevia livena olevia striimeja juuri nyt.';
-                    }
-                }
+            if (twErr && kickRows === null) {
+                if (auto) { console.warn('Automaattinen kategoriapäivitys epäonnistui:', twErr); return; }
+                categoryRows = null;
+                categoryMsg = 'Virhe: ' + twErr + ' (tarkista Client-ID/Token)';
+                categoryStatusLine = '';
+                renderCategoryResults();
                 return;
             }
 
-            const cacheBuster = Date.now();
+            categoryMsg = '';
+            categoryRows = [...twRows, ...(kickRows || [])];
+            categoryStatusLine = `Twitch: ${twErr ? 'virhe (' + twErr + ')' : twRows.length + ' striimiä'} · Kick: ${kickRows === null ? 'ei saatavilla (kokeellinen)' : kickRows.length + ' striimiä'}`;
+            twRows.slice(0, 100).forEach(r => { const img = new Image(); img.src = r.thumbBig; });
+            renderCategoryResults();
+        }
 
-            twitchResults.forEach(s => {
-                const login = s.user_login.toLowerCase();
+        function renderCategoryResults() {
+            const box = document.getElementById('categoryResults');
+            if (!box) return;
+            const prevScroll = box.scrollTop;
+            box.innerHTML = '';
 
-                const smallThumbUrl = s.thumbnail_url.replace('{width}', '80').replace('{height}', '45') + `?t=${cacheBuster}`;
-                const bigThumbUrl = s.thumbnail_url.replace('{width}', '320').replace('{height}', '180') + `?t=${cacheBuster}`;
+            if (categoryMsg) { box.textContent = categoryMsg; return; }
+            if (!categoryRows) return;
 
-                const preloadImg = new Image();
-                preloadImg.src = bigThumbUrl;
+            const activeKeys = slots.filter(sl => sl.dataset.name).map(sl => `${sl.dataset.plat}:${sl.dataset.name.toLowerCase()}`);
+            const nowMs = Date.now();
 
-                const item = buildCategoryResultItem({
-                    plat: 'twitch',
-                    login,
-                    displayName: s.user_name,
-                    viewerCount: s.viewer_count,
-                    smallThumbUrl,
-                    bigThumbUrl,
-                    linkUrl: `https://www.twitch.tv/${login}`
-                });
-                resultsBox.appendChild(item);
+            const filtered = categoryRows.filter(r => {
+                if (r.viewers < 5) return false;
+                if (activeKeys.includes(`${r.plat}:${r.login}`)) return false;
+                if (blacklist.some(b => b.login === r.login)) return false;
+                if (r.startedMs && (nowMs - r.startedMs) / 3600000 > uptimeFilterHours) return false;
+                if (bannedTitleWords.some(w => r.title && r.title.toLowerCase().includes(w.toLowerCase()))) return false;
+                return true;
+            }).sort((a, b) => b.viewers - a.viewers).slice(0, 100);
+
+            if (categoryStatusLine) {
+                const st = document.createElement('div');
+                st.className = 'hint-text';
+                st.style.marginBottom = '6px';
+                st.textContent = categoryStatusLine + ` · näytetään ${filtered.length}`;
+                box.appendChild(st);
+            }
+
+            if (filtered.length === 0) {
+                const none = document.createElement('div');
+                none.textContent = 'Ei suodattimet läpäiseviä livenä olevia striimejä juuri nyt.';
+                box.appendChild(none);
+                return;
+            }
+
+            filtered.forEach(r => box.appendChild(buildCategoryRow(r)));
+            box.scrollTop = prevScroll;
+        }
+
+        // Rivi: kuva > alustamerkki > ✓ (vain jos tallennettu) > katsojamaara > nimi > Green > Block
+        function buildCategoryRow(r) {
+            const item = document.createElement('div');
+            item.className = 'saved-channel';
+            item.style.cursor = 'default';
+
+            const linkArea = document.createElement('a');
+            linkArea.className = 'left-group';
+            linkArea.href = r.url;
+            linkArea.target = '_blank';
+            linkArea.rel = 'noopener noreferrer';
+            linkArea.style.cursor = 'pointer';
+            linkArea.addEventListener('click', (e) => {
+                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                    e.preventDefault();
+                    loadFromCategorySearch(r.login, r.plat);
+                }
             });
+
+            const thumb = document.createElement('img');
+            thumb.className = 'stream-thumb';
+            if (r.thumbSmall) thumb.src = r.thumbSmall;
+            thumb.alt = '';
+            thumb.loading = 'lazy';
+            if (r.thumbBig) {
+                thumb.addEventListener('mouseenter', (e) => showThumbPreview(e, r.thumbBig));
+                thumb.addEventListener('mouseleave', hideThumbPreview);
+            }
+            linkArea.appendChild(thumb);
+
+            linkArea.appendChild(createPlatformBadge(r.plat));
+
+            if (savedChannels.some(c => c.name === r.login && c.plat === r.plat)) {
+                const chk = document.createElement('span');
+                chk.className = 'saved-check';
+                chk.textContent = '✓';
+                chk.title = 'Tallennettu';
+                linkArea.appendChild(chk);
+            }
+
+            const viewers = document.createElement('span');
+            viewers.className = 'cat-viewers';
+            viewers.textContent = r.viewers.toLocaleString('fi-FI');
+            linkArea.appendChild(viewers);
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'name-text';
+            nameSpan.textContent = r.display;
+            linkArea.appendChild(nameSpan);
+
+            item.appendChild(linkArea);
+
+            const green = isGreenlisted(r.login, r.plat);
+            const greenBtn = document.createElement('button');
+            greenBtn.className = 'green-btn' + (green ? ' on' : '');
+            greenBtn.textContent = green ? 'Green ✓' : 'Green';
+            greenBtn.title = green
+                ? 'Greenlistillä - klikkaa poistaaksesi'
+                : 'Greenlist: ohittaa kategoriasuodattimen ja tallentaa kanavan';
+            greenBtn.addEventListener('click', () => {
+                if (isGreenlisted(r.login, r.plat)) removeGreenlist(r.login, r.plat);
+                else addGreenlist(r.login, r.plat);
+            });
+            item.appendChild(greenBtn);
+
+            const blockBtn = document.createElement('button');
+            blockBtn.className = 'block-btn';
+            blockBtn.textContent = 'Block';
+            blockBtn.title = 'Estä kanava (poistaa myös tallennetuista)';
+            blockBtn.addEventListener('click', () => blockChannel(r.login));
+            item.appendChild(blockBtn);
+
+            return item;
         }
 
         async function refreshTwitchLiveStatus(silent = false) {
-            if (!twitchCreds.clientId || !twitchCreds.token) {
-                if (!silent) showToast('Lisää ensin Twitchin Client-ID ja Access Token yllä.');
+            if (!hasTwitchCreds()) {
+                if (!silent) alert('Lisää ensin Twitchin Client-ID ja Access Token ylle.');
                 return;
             }
             const twitchLogins = savedChannels.filter(c => c.plat === 'twitch').map(c => c.name);
@@ -2547,9 +1888,7 @@
             try {
                 for (const chunk of chunks) {
                     const params = chunk.map(n => `user_login=${encodeURIComponent(n)}`).join('&');
-                    const res = await fetch(`https://api.twitch.tv/helix/streams?first=100&${params}`, {
-                        headers: { 'Client-Id': twitchCreds.clientId, 'Authorization': `Bearer ${twitchCreds.token}` }
-                    });
+                    const res = await twitchFetch(`https://api.twitch.tv/helix/streams?first=100&${params}`);
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();
                     data.data.forEach(s => liveInfo.set(s.user_login.toLowerCase(), { viewerCount: s.viewer_count, gameName: s.game_name || '' }));
@@ -2560,20 +1899,19 @@
                         c.isLive = info !== undefined;
                         c.viewerCount = info !== undefined ? info.viewerCount : null;
                         c.gameName = info !== undefined ? info.gameName : null;
-                        c.lastCheckedAt = Date.now();
                     }
                 });
                 persistSavedChannels();
                 renderSavedList();
                 checkCategoryEviction();
-                checkOfflineOrStaleEviction();
                 if (autoFillEnabled) runAutoFill();
-                evaluateGridOvershoot();
+                setRefreshStatus(`Twitch päivitetty ${timeNowText()} ✓`, false);
             } catch (err) {
+                setRefreshStatus(`✗ Twitch-päivitys epäonnistui ${timeNowText()}: ${err.message}`, true);
                 if (!silent) {
-                    showToast('Live-tilan haku epäonnistui: ' + err.message + ' (tarkista Client-ID ja Access Token)');
+                    alert('Live-tilan haku epäonnistui: ' + err.message + '\n\nTarkista Client-ID ja Access Token.');
                 } else {
-                    console.warn('Automaattinen live-tilan paivitys epaonnistui:', err.message);
+                    console.warn('Automaattinen live-tilan päivitys epäonnistui:', err.message);
                 }
             }
         }
@@ -2597,7 +1935,6 @@
                     const data = await res.json();
                     if (data && typeof data === 'object' && 'livestream' in data) {
                         c.isLive = data.livestream !== null && data.livestream !== undefined;
-                        c.lastCheckedAt = Date.now();
                         if (c.isLive) {
                             const ls = data.livestream;
                             const vc = (typeof ls.viewer_count === 'number') ? ls.viewer_count
@@ -2615,22 +1952,15 @@
                         anyUpdated = true;
                     }
                 } catch (e) {
-                    // CORS-esto tms. - jatetaan kanavan tila ennalleen. lastCheckedAt EI
-                    // paivity tassa - jos tama jatkuu pitkaan, isChannelStatusStale()
-                    // havaitsee sen ja kanava "vanhenee" pois vihreasta automaattisesti.
+                    // CORS-esto tms. - jatetaan kanavan tila ennalleen.
                 }
             }
             if (anyUpdated) {
                 persistSavedChannels();
                 renderSavedList();
+                checkCategoryEviction();
+                if (autoFillEnabled) runAutoFill();
             }
-            // Nama ajetaan AINA, ei vain anyUpdated-tilanteessa - vanhentumistarkistus pitaa
-            // tehda myos silloin kun kaikki tama kierroksen haut epaonnistuivat, koska juuri
-            // silloin lisaa aikaa on kulunut edellisesta onnistuneesta tarkistuksesta.
-            checkCategoryEviction();
-            checkOfflineOrStaleEviction();
-            if (autoFillEnabled) runAutoFill();
-            evaluateGridOvershoot();
         }
 
         // ---------- Automaattinen paivitys: kytkin + sekuntilaskuri + vali-liukusaadin ----------
@@ -2643,13 +1973,16 @@
         }
 
         function onAutoRefreshToggleChange() {
-            applyToggleSetting('autoRefreshToggle', 'autoRefreshEnabled', v => { autoRefreshEnabled = v; });
+            autoRefreshEnabled = document.getElementById('autoRefreshToggle').checked;
+            localStorage.setItem('autoRefreshEnabled', autoRefreshEnabled);
             if (autoRefreshEnabled) autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
             updateAutoRefreshUI();
         }
 
         function onAutoRefreshIntervalChange() {
-            applySliderSetting('autoRefreshIntervalSlider', 'autoRefreshIntervalSeconds', v => { autoRefreshIntervalSeconds = v; }, updateAutoRefreshIntervalLabel);
+            autoRefreshIntervalSeconds = parseInt(document.getElementById('autoRefreshIntervalSlider').value);
+            localStorage.setItem('autoRefreshIntervalSeconds', autoRefreshIntervalSeconds);
+            updateAutoRefreshIntervalLabel();
             if (autoRefreshSecondsLeft > autoRefreshIntervalSeconds) {
                 autoRefreshSecondsLeft = autoRefreshIntervalSeconds;
                 updateAutoRefreshUI();
@@ -2661,10 +1994,8 @@
         }
 
         async function runAutoRefreshCycle() {
-            if (twitchCreds.clientId && twitchCreds.token) {
-                await refreshTwitchLiveStatus(true);
-                if (lastCategoryQuery) await searchTwitchCategory(true);
-            }
+            if (hasTwitchCreds()) await refreshTwitchLiveStatus(true);
+            if (lastCategoryQuery) await searchTwitchCategory(true);
             await refreshKickLiveStatus();
             checkDuplicateNames();
         }
@@ -2679,18 +2010,10 @@
             updateAutoRefreshUI();
         }, 1000);
 
-        // Modaalin sekuntinaytto (blacklist-merkintojen "lisatty X min" -teksti paivittyy,
-        // ja tilastomodaalin ajat paivittyvat jos se on auki), sekunnin valein, riippumatta
-        // Automaattinen paivitys -kytkimesta. HUOM: itse blacklist-merkinnat EIVAT koskaan
-        // poistu tasta automaattisesti - vain naytetty ika-teksti lakkaa nakymasta (ks.
-        // formatBlacklistAge). Poisto tapahtuu ainoastaan manuaalisesti X-napista.
+        // Modaalin "lisatty X min Y sek" -tekstit paivittyvat paikallaan sekunnin valein.
+        // Merkintoja EI koskaan poisteta ajan perusteella.
         setInterval(() => {
-            if (document.getElementById('blacklistModal').style.display === 'flex') {
-                renderBlacklistModal();
-            }
-            if (document.getElementById('statsModal').style.display === 'flex') {
-                renderStatsModal();
-            }
+            if (isModalOpen()) updateListAges();
         }, 1000);
 
         // ---------- Asetusten vienti / tuonti ----------
@@ -2703,6 +2026,7 @@
                 twitchCreds: JSON.parse(localStorage.getItem('twitchCreds') || 'null'),
                 categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]'),
                 blacklist: JSON.parse(localStorage.getItem('blacklist') || '[]'),
+                greenlist: JSON.parse(localStorage.getItem('greenlist') || '[]'),
                 bannedTitleWords: JSON.parse(localStorage.getItem('bannedTitleWords') || '[]'),
                 uptimeFilterHours: localStorage.getItem('uptimeFilterHours'),
                 autoRefreshIntervalSeconds: localStorage.getItem('autoRefreshIntervalSeconds'),
@@ -2715,14 +2039,6 @@
                 autoRefreshEnabled: localStorage.getItem('autoRefreshEnabled'),
                 autoFillEnabled: localStorage.getItem('autoFillEnabled'),
                 categoryFilterEnabled: localStorage.getItem('categoryFilterEnabled'),
-                allowGridOvershoot: localStorage.getItem('allowGridOvershoot'),
-                randomFillEnabled: localStorage.getItem('randomFillEnabled'),
-                randomFillMaxRoll: localStorage.getItem('randomFillMaxRoll'),
-                rouletteMinutes: localStorage.getItem('rouletteMinutes'),
-                forceQualityEnabled: localStorage.getItem('forceQualityEnabled'),
-                forceQualityLevel: localStorage.getItem('forceQualityLevel'),
-                watchStats: JSON.parse(localStorage.getItem('watchStats') || '{}'),
-                categoryWatchStats: JSON.parse(localStorage.getItem('categoryWatchStats') || '{}'),
                 boxHeight_active: localStorage.getItem('boxHeight_active'),
                 boxHeight_twitch: localStorage.getItem('boxHeight_twitch'),
                 boxHeight_kick: localStorage.getItem('boxHeight_kick')
@@ -2753,6 +2069,7 @@
                     if (data.twitchCreds) localStorage.setItem('twitchCreds', JSON.stringify(data.twitchCreds));
                     if (data.categoryHistory !== undefined) localStorage.setItem('categoryHistory', JSON.stringify(data.categoryHistory));
                     if (data.blacklist !== undefined) localStorage.setItem('blacklist', JSON.stringify(data.blacklist));
+                    if (data.greenlist !== undefined) localStorage.setItem('greenlist', JSON.stringify(data.greenlist));
                     if (data.bannedTitleWords !== undefined) localStorage.setItem('bannedTitleWords', JSON.stringify(data.bannedTitleWords));
                     if (data.uptimeFilterHours) localStorage.setItem('uptimeFilterHours', data.uptimeFilterHours);
                     if (data.autoRefreshIntervalSeconds) localStorage.setItem('autoRefreshIntervalSeconds', data.autoRefreshIntervalSeconds);
@@ -2765,21 +2082,13 @@
                     if (data.autoRefreshEnabled !== undefined && data.autoRefreshEnabled !== null) localStorage.setItem('autoRefreshEnabled', data.autoRefreshEnabled);
                     if (data.autoFillEnabled !== undefined && data.autoFillEnabled !== null) localStorage.setItem('autoFillEnabled', data.autoFillEnabled);
                     if (data.categoryFilterEnabled !== undefined && data.categoryFilterEnabled !== null) localStorage.setItem('categoryFilterEnabled', data.categoryFilterEnabled);
-                    if (data.allowGridOvershoot !== undefined && data.allowGridOvershoot !== null) localStorage.setItem('allowGridOvershoot', data.allowGridOvershoot);
-                    if (data.randomFillEnabled !== undefined && data.randomFillEnabled !== null) localStorage.setItem('randomFillEnabled', data.randomFillEnabled);
-                    if (data.randomFillMaxRoll) localStorage.setItem('randomFillMaxRoll', data.randomFillMaxRoll);
-                    if (data.rouletteMinutes) localStorage.setItem('rouletteMinutes', data.rouletteMinutes);
-                    if (data.forceQualityEnabled !== undefined && data.forceQualityEnabled !== null) localStorage.setItem('forceQualityEnabled', data.forceQualityEnabled);
-                    if (data.forceQualityLevel) localStorage.setItem('forceQualityLevel', data.forceQualityLevel);
-                    if (data.watchStats !== undefined) localStorage.setItem('watchStats', JSON.stringify(data.watchStats));
-                    if (data.categoryWatchStats !== undefined) localStorage.setItem('categoryWatchStats', JSON.stringify(data.categoryWatchStats));
                     if (data.boxHeight_active) localStorage.setItem('boxHeight_active', data.boxHeight_active);
                     if (data.boxHeight_twitch) localStorage.setItem('boxHeight_twitch', data.boxHeight_twitch);
                     if (data.boxHeight_kick) localStorage.setItem('boxHeight_kick', data.boxHeight_kick);
-                    showToast('Asetukset tuotu onnistuneesti. Sivu ladataan uudelleen.');
+                    alert('Asetukset tuotu onnistuneesti. Sivu ladataan uudelleen.');
                     location.reload();
                 } catch (err) {
-                    showToast('Tiedoston lukeminen epäonnistui: virheellinen JSON-tiedosto.');
+                    alert('Tiedoston lukeminen epaonnistui: virheellinen JSON-tiedosto.');
                 }
             };
             reader.readAsText(file);
@@ -2790,6 +2099,7 @@
 
         document.getElementById('twitchClientId').value = twitchCreds.clientId || '';
         document.getElementById('twitchToken').value = twitchCreds.token || '';
+        document.getElementById('twitchClientSecret').value = twitchCreds.clientSecret || '';
         document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
         document.getElementById('autoFillToggle').checked = autoFillEnabled;
         document.getElementById('categoryFilterToggle').checked = categoryFilterEnabled;
@@ -2797,12 +2107,6 @@
         document.getElementById('duplicateThresholdSlider').value = duplicateNameThreshold;
         document.getElementById('uptimeFilterSlider').value = uptimeFilterHours;
         document.getElementById('autoRefreshIntervalSlider').value = autoRefreshIntervalSeconds;
-        document.getElementById('forceQualityToggle').checked = forceQualityEnabled;
-        document.getElementById('forceQualitySelect').value = forceQualityLevel;
-        document.getElementById('gridOvershootToggle').checked = allowGridOvershoot;
-        document.getElementById('randomFillToggle').checked = randomFillEnabled;
-        document.getElementById('randomFillMaxRollSlider').value = randomFillMaxRoll;
-        updateRandomFillMaxRollLabel();
         updateUptimeFilterLabel();
         updateAutoRefreshIntervalLabel();
         updateDuplicateThresholdLabel();
@@ -2812,43 +2116,23 @@
         updateAutoRefreshUI();
         restoreCollapsibleStates();
         initSlots();
-        startOrStopRouletteTimer();
-        document.getElementById('rouletteMinutesSlider').value = rouletteMinutes;
-        updateRouletteMinutesLabel();
         setupResizablePersistence('activeContent', 'boxHeight_active');
         setupResizablePersistence('twitchListWrap', 'boxHeight_twitch');
         setupResizablePersistence('kickListWrap', 'boxHeight_kick');
         document.getElementById('blacklistModal').addEventListener('click', (e) => {
             if (e.target.id === 'blacklistModal') closeBlacklistModal();
         });
-        document.getElementById('statsModal').addEventListener('click', (e) => {
-            if (e.target.id === 'statsModal') closeStatsModal();
-        });
-        document.getElementById('resetConfirmModal').addEventListener('click', (e) => {
-            if (e.target.id === 'resetConfirmModal') closeResetConfirmModal();
-        });
-        // Kirjoittaa katseluajat talteen 30s valein etta data ei katoa jos selain
-        // kaatuu/sammuu odottamatta, seka viela kerran juuri ennen sivun sulkeutumista.
-        setInterval(flushAllActiveSessions, 30000);
-        window.addEventListener('beforeunload', flushAllActiveSessions);
-
-        // Katseluaika lasketaan vain kun sivu on seka nakyvissa etta fokusoituna - alt-tab
-        // toiseen ikkunaan tai eri valilehdelle siirtyminen pysayttaa laskennan siksi aikaa.
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                pauseAllWatchSessions();
-            } else if (document.hasFocus()) {
-                resumeAllWatchSessions();
+        (async () => {
+            // Uusi token etukateen jos se vanhenee alle vuorokauden sisaan (vaatii Client Secretin).
+            if (twitchCreds.clientId && twitchCreds.clientSecret &&
+                (!twitchCreds.token || (twitchCreds.tokenExpiresAt && twitchCreds.tokenExpiresAt - Date.now() < 86400000))) {
+                await renewTwitchToken();
+            } else if (twitchCreds.token && twitchCreds.tokenExpiresAt) {
+                setTokenStatus('Token tallennettu' + describeTokenExpiry(), twitchCreds.tokenExpiresAt < Date.now());
             }
-        });
-        window.addEventListener('blur', () => {
-            pauseAllWatchSessions();
-        });
-        window.addEventListener('focus', () => {
-            if (!document.hidden) resumeAllWatchSessions();
-        });
-        if (twitchCreds.clientId && twitchCreds.token) refreshTwitchLiveStatus(true);
-        refreshKickLiveStatus();
+            if (hasTwitchCreds()) await refreshTwitchLiveStatus(true);
+            refreshKickLiveStatus();
+        })();
     </script>
 </body>
 </html>
