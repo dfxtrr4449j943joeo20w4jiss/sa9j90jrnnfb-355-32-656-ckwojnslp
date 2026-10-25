@@ -81,6 +81,8 @@
         .saved-check { color: #53fc18; font-weight: bold; font-size: 12px; flex-shrink: 0; }
         .cat-viewers { color: #bbb; font-size: 12px; flex-shrink: 0; }
         .green-tag { background: #1f8a35; color: #fff; font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+        .save-btn { background: #f2f2f2; color: #111; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; flex-shrink: 0; }
+        .save-btn:hover { background: #fff; }
         .green-btn { background: #1f6f2c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
         .green-btn.on { background: #53fc18; color: #000; }
         .block-btn { background: #eb0400; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
@@ -1798,57 +1800,100 @@
             box.scrollTop = prevScroll;
         }
 
-        // Rivi: kuva > alustamerkki > ✓ (vain jos tallennettu) > katsojamaara > nimi > Green > Block
+        // Tallentaa kanavan kuten normaali lisays (ei lataa playeriin).
+        function saveChannelFromCategory(login, plat) {
+            if (!savedChannels.find(c => c.name === login && c.plat === plat)) {
+                savedChannels.push({ name: login, plat, lastClosedLiveAt: 0, isLive: null, viewerCount: null, gameName: null });
+                persistSavedChannels();
+            }
+            refreshAfterListChange();
+            if (plat === 'twitch') refreshTwitchLiveStatus(true);
+            else refreshKickLiveStatus();
+        }
+
+        // Rivi: vasemmalla kuva (ennallaan). Oikealla kaksi riinta:
+        //   ylempi: T/K > ✓ (vain jos tallennettu) > katsojat > koko nimi
+        //   alempi: Tallenna (vain jos ei tallennettu) > Green > Block
         function buildCategoryRow(r) {
             const item = document.createElement('div');
             item.className = 'saved-channel';
             item.style.cursor = 'default';
+            item.style.alignItems = 'flex-start';
 
-            const linkArea = document.createElement('a');
-            linkArea.className = 'left-group';
-            linkArea.href = r.url;
-            linkArea.target = '_blank';
-            linkArea.rel = 'noopener noreferrer';
-            linkArea.style.cursor = 'pointer';
-            linkArea.addEventListener('click', (e) => {
+            const openStream = (e) => {
                 if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                     e.preventDefault();
                     loadFromCategorySearch(r.login, r.plat);
                 }
-            });
+            };
+            const makeLink = () => {
+                const a = document.createElement('a');
+                a.href = r.url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.style.cursor = 'pointer';
+                a.style.textDecoration = 'none';
+                a.style.color = 'inherit';
+                a.addEventListener('click', openStream);
+                return a;
+            };
 
+            const thumbLink = makeLink();
+            thumbLink.style.flexShrink = '0';
             const thumb = document.createElement('img');
             thumb.className = 'stream-thumb';
             if (r.thumbSmall) thumb.src = r.thumbSmall;
             thumb.alt = '';
             thumb.loading = 'lazy';
+            thumb.style.display = 'block';
             if (r.thumbBig) {
                 thumb.addEventListener('mouseenter', (e) => showThumbPreview(e, r.thumbBig));
                 thumb.addEventListener('mouseleave', hideThumbPreview);
             }
-            linkArea.appendChild(thumb);
+            thumbLink.appendChild(thumb);
+            item.appendChild(thumbLink);
 
-            linkArea.appendChild(createPlatformBadge(r.plat));
+            const right = document.createElement('div');
+            right.style.cssText = 'display:flex; flex-direction:column; gap:5px; flex:1; min-width:0;';
 
-            if (savedChannels.some(c => c.name === r.login && c.plat === r.plat)) {
+            const top = makeLink();
+            top.style.cssText += 'display:flex; align-items:flex-start; gap:6px; min-width:0;';
+            const badge = createPlatformBadge(r.plat);
+            badge.style.marginTop = '1px';
+            top.appendChild(badge);
+
+            const isSaved = savedChannels.some(c => c.name === r.login && c.plat === r.plat);
+            if (isSaved) {
                 const chk = document.createElement('span');
                 chk.className = 'saved-check';
                 chk.textContent = '✓';
                 chk.title = 'Tallennettu';
-                linkArea.appendChild(chk);
+                top.appendChild(chk);
             }
 
             const viewers = document.createElement('span');
             viewers.className = 'cat-viewers';
             viewers.textContent = r.viewers.toLocaleString('fi-FI');
-            linkArea.appendChild(viewers);
+            top.appendChild(viewers);
 
             const nameSpan = document.createElement('span');
             nameSpan.className = 'name-text';
+            nameSpan.style.cssText = 'white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25;';
             nameSpan.textContent = r.display;
-            linkArea.appendChild(nameSpan);
+            top.appendChild(nameSpan);
+            right.appendChild(top);
 
-            item.appendChild(linkArea);
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex; gap:5px; flex-wrap:wrap;';
+
+            if (!isSaved) {
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'save-btn';
+                saveBtn.textContent = 'Tallenna';
+                saveBtn.title = 'Tallenna kanava listaan (ei lataa sitä playeriin)';
+                saveBtn.addEventListener('click', () => saveChannelFromCategory(r.login, r.plat));
+                actions.appendChild(saveBtn);
+            }
 
             const green = isGreenlisted(r.login, r.plat);
             const greenBtn = document.createElement('button');
@@ -1861,15 +1906,17 @@
                 if (isGreenlisted(r.login, r.plat)) removeGreenlist(r.login, r.plat);
                 else addGreenlist(r.login, r.plat);
             });
-            item.appendChild(greenBtn);
+            actions.appendChild(greenBtn);
 
             const blockBtn = document.createElement('button');
             blockBtn.className = 'block-btn';
             blockBtn.textContent = 'Block';
             blockBtn.title = 'Estä kanava (poistaa myös tallennetuista)';
             blockBtn.addEventListener('click', () => blockChannel(r.login));
-            item.appendChild(blockBtn);
+            actions.appendChild(blockBtn);
 
+            right.appendChild(actions);
+            item.appendChild(right);
             return item;
         }
 
