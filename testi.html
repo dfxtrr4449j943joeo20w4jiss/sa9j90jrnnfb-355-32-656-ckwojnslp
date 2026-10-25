@@ -360,8 +360,13 @@
             const rawBl = JSON.parse(localStorage.getItem('blacklist'));
             if (Array.isArray(rawBl)) {
                 blacklist = rawBl.map(b => {
-                    if (typeof b === 'string') return { login: b.toLowerCase(), addedAt: 0 };
-                    return { login: String(b.login || '').toLowerCase(), addedAt: (typeof b.addedAt === 'number') ? b.addedAt : 0 };
+                    // Vanhat merkinnat (ilman alustaa) tulivat Twitch-hausta -> twitch.
+                    if (typeof b === 'string') return { login: b.toLowerCase(), plat: 'twitch', addedAt: 0 };
+                    return {
+                        login: String(b.login || '').toLowerCase(),
+                        plat: b.plat === 'kick' ? 'kick' : 'twitch',
+                        addedAt: (typeof b.addedAt === 'number') ? b.addedAt : 0
+                    };
                 }).filter(b => b.login);
             }
         } catch (e) { blacklist = []; }
@@ -668,25 +673,32 @@
             if (isModalOpen()) renderBlacklistModal();
         }
 
-        // Blokkaus: lisaa blacklistiin, poistaa greenlististä JA tallennetuista kanavista.
-        function blockChannel(login) {
-            login = String(login).toLowerCase();
-            if (!blacklist.some(b => b.login === login)) {
-                blacklist.push({ login, addedAt: Date.now() });
+        function isBlacklisted(login, plat) {
+            const n = String(login || '').toLowerCase();
+            return blacklist.some(b => b.login === n && b.plat === plat);
+        }
+
+        // Blokkaus (alustakohtainen): lisaa blacklistiin, poistaa greenlististä JA tallennetuista kanavista.
+        function blockChannel(login, plat) {
+            login = String(login || '').trim().toLowerCase();
+            if (!login) return;
+            plat = plat === 'kick' ? 'kick' : 'twitch';
+            if (!isBlacklisted(login, plat)) {
+                blacklist.push({ login, plat, addedAt: Date.now() });
                 persistBlacklist();
             }
-            if (greenlist.some(g => g.login === login)) {
-                greenlist = greenlist.filter(g => g.login !== login);
+            if (isGreenlisted(login, plat)) {
+                greenlist = greenlist.filter(g => !(g.login === login && g.plat === plat));
                 persistGreenlist();
             }
             const before = savedChannels.length;
-            savedChannels = savedChannels.filter(c => c.name.toLowerCase() !== login);
+            savedChannels = savedChannels.filter(c => !(c.name.toLowerCase() === login && c.plat === plat));
             if (savedChannels.length !== before) persistSavedChannels();
             refreshAfterListChange();
         }
 
-        function unblockChannel(login) {
-            blacklist = blacklist.filter(b => b.login !== login);
+        function unblockChannel(login, plat) {
+            blacklist = blacklist.filter(b => !(b.login === login && b.plat === plat));
             persistBlacklist();
             refreshAfterListChange();
         }
@@ -696,8 +708,8 @@
             login = String(login || '').trim().toLowerCase();
             if (!login) return;
             plat = plat === 'kick' ? 'kick' : 'twitch';
-            if (blacklist.some(b => b.login === login)) {
-                blacklist = blacklist.filter(b => b.login !== login);
+            if (isBlacklisted(login, plat)) {
+                blacklist = blacklist.filter(b => !(b.login === login && b.plat === plat));
                 persistBlacklist();
             }
             if (!isGreenlisted(login, plat)) {
@@ -724,7 +736,8 @@
             const plat = document.getElementById('greenPlatform').value;
             const name = input.value.trim().toLowerCase();
             if (!name) return;
-            addGreenlist(name, plat);
+            if (listModalMode === 'green') addGreenlist(name, plat);
+            else blockChannel(name, plat);
             input.value = '';
         }
 
@@ -777,7 +790,8 @@
             document.getElementById('listModalTitle').textContent = isGreen
                 ? 'Greenlist (immuuni kategoriasuodattimelle)'
                 : 'Mustalla listalla olevat kanavat';
-            document.getElementById('greenAddRow').style.display = isGreen ? 'flex' : 'none';
+            document.getElementById('greenAddRow').style.display = 'flex';
+            document.getElementById('greenInput').placeholder = isGreen ? 'Lisää kanava greenlistille...' : 'Lisää kanava blacklistiin...';
 
             ['modeBtnBlack', 'modeBtnGreen'].forEach(id => document.getElementById(id).classList.remove('sort-active'));
             document.getElementById(isGreen ? 'modeBtnGreen' : 'modeBtnBlack').classList.add('sort-active');
@@ -822,7 +836,7 @@
 
                 const left = document.createElement('span');
                 left.className = 'left-group';
-                if (isGreen) left.appendChild(createPlatformBadge(b.plat));
+                left.appendChild(createPlatformBadge(b.plat));
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'name-text';
@@ -839,7 +853,7 @@
                 btn.title = isGreen ? 'Poista greenlistiltä' : 'Poista mustalta listalta';
                 btn.addEventListener('click', () => {
                     if (isGreen) removeGreenlist(b.login, b.plat);
-                    else unblockChannel(b.login);
+                    else unblockChannel(b.login, b.plat);
                 });
                 row.appendChild(btn);
 
@@ -1406,7 +1420,7 @@
                 const candidates = savedChannels.filter(c => {
                     if (c.isLive !== true) return false;
                     if (excludeKeys.includes(`${c.plat}:${c.name}`)) return false;
-                    if (blacklist.some(b => b.login === c.name.toLowerCase())) return false;
+                    if (isBlacklisted(c.name, c.plat)) return false;
                     if ((now - (c.lastClosedLiveAt || 0)) <= cooldownMs) return false;
                     if (categoryFilterEnabled && enabledCategories.length > 0 && !isGreenlisted(c.name, c.plat)) {
                         const matches = c.gameName && enabledCategories.some(h => h.toLowerCase() === c.gameName.toLowerCase());
@@ -1775,7 +1789,7 @@
             const filtered = categoryRows.filter(r => {
                 if (r.viewers < 5) return false;
                 if (activeKeys.includes(`${r.plat}:${r.login}`)) return false;
-                if (blacklist.some(b => b.login === r.login)) return false;
+                if (isBlacklisted(r.login, r.plat)) return false;
                 if (r.startedMs && (nowMs - r.startedMs) / 3600000 > uptimeFilterHours) return false;
                 if (bannedTitleWords.some(w => r.title && r.title.toLowerCase().includes(w.toLowerCase()))) return false;
                 return true;
@@ -1886,15 +1900,6 @@
             const actions = document.createElement('div');
             actions.style.cssText = 'display:flex; gap:5px; flex-wrap:wrap;';
 
-            if (!isSaved) {
-                const saveBtn = document.createElement('button');
-                saveBtn.className = 'save-btn';
-                saveBtn.textContent = 'Tallenna';
-                saveBtn.title = 'Tallenna kanava listaan (ei lataa sitä playeriin)';
-                saveBtn.addEventListener('click', () => saveChannelFromCategory(r.login, r.plat));
-                actions.appendChild(saveBtn);
-            }
-
             const green = isGreenlisted(r.login, r.plat);
             const greenBtn = document.createElement('button');
             greenBtn.className = 'green-btn' + (green ? ' on' : '');
@@ -1912,8 +1917,17 @@
             blockBtn.className = 'block-btn';
             blockBtn.textContent = 'Block';
             blockBtn.title = 'Estä kanava (poistaa myös tallennetuista)';
-            blockBtn.addEventListener('click', () => blockChannel(r.login));
+            blockBtn.addEventListener('click', () => blockChannel(r.login, r.plat));
             actions.appendChild(blockBtn);
+
+            if (!isSaved) {
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'save-btn';
+                saveBtn.textContent = 'Tallenna';
+                saveBtn.title = 'Tallenna kanava listaan (ei lataa sitä playeriin)';
+                saveBtn.addEventListener('click', () => saveChannelFromCategory(r.login, r.plat));
+                actions.appendChild(saveBtn);
+            }
 
             right.appendChild(actions);
             item.appendChild(right);
